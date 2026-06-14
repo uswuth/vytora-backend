@@ -29,6 +29,7 @@ func main() {
 	vendorRepo := repository.NewVendorRepository(database.Pool)
 	riskAssessmentRepo := repository.NewRiskAssessmentRepository(database.Pool)
 	compRepo := repository.NewComplianceRecordRepository(database.Pool)
+	contractRepo := repository.NewContractRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -39,6 +40,7 @@ func main() {
 	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService)
 	riskAssessmentHandler := handlers.NewRiskAssessmentHandler(riskAssessmentRepo, vendorRepo, seqService)
 	compHandler := handlers.NewComplianceRecordHandler(compRepo, vendorRepo, seqService)
+	contractHandler := handlers.NewContractHandler(contractRepo, vendorRepo, seqService)
 
 	r := chi.NewRouter()
 
@@ -115,6 +117,16 @@ func main() {
 			r.Put("/api/v1/compliance/{code}", compHandler.Update)
 		})
 		r.Get("/api/v1/compliance/expiring", compHandler.Expiring) // read access for anyone authenticated
+
+		// Contract routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canEditVendor")) // reuse edit permission for contracts
+			r.Post("/api/v1/contracts", contractHandler.Create)
+			r.Get("/api/v1/contracts", contractHandler.List)
+			r.Get("/api/v1/contracts/{code}", contractHandler.Get)
+		})
+		r.Get("/api/v1/contracts/expiring", contractHandler.Expiring) // read-only for authenticated users
+
 	})
 
 	fmt.Println("VRMP server starting on http://localhost:8080")
