@@ -11,7 +11,7 @@ import (
 	"github.com/uswuth/vytora-backend/internal/config"
 	"github.com/uswuth/vytora-backend/internal/database"
 	"github.com/uswuth/vytora-backend/internal/handlers"
-	"github.com/uswuth/vytora-backend/internal/middleware" // for auth and rbac
+	"github.com/uswuth/vytora-backend/internal/middleware" // auth + rbac
 	"github.com/uswuth/vytora-backend/internal/repository"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
@@ -68,10 +68,23 @@ func main() {
 				claims.UserID, claims.Code, claims.Email, claims.Role)
 		})
 
-		// Vendor routes – requires canCreateVendor
+		// Vendor routes – with RBAC
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission("canCreateVendor"))
 			r.Post("/api/v1/vendors", vendorHandler.Create)
+		})
+
+		// These can have separate RBAC checks
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canEditVendor"))   // covers view + edit for now
+			r.Get("/api/v1/vendors", vendorHandler.List)
+			r.Get("/api/v1/vendors/{code}", vendorHandler.Get)
+			r.Put("/api/v1/vendors/{code}", vendorHandler.Update)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canDeleteVendor"))
+			r.Delete("/api/v1/vendors/{code}", vendorHandler.Delete)
 		})
 	})
 
