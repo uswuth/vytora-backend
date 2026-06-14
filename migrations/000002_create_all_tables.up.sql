@@ -1,11 +1,12 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto"
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE
     users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         code VARCHAR(20) UNIQUE NOT NULL,
-        email VARCHAR(225) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        full_name VARCHAR(225) NOT NULL,
+        full_name VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL CHECK (
             role IN (
                 'system_admin',
@@ -15,8 +16,7 @@ CREATE TABLE
                 'auditor'
             )
         ),
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT now (),
+        is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMPTZ DEFAULT now (),
         updated_at TIMESTAMPTZ DEFAULT now ()
     );
@@ -58,8 +58,8 @@ CREATE TABLE
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         code VARCHAR(20) UNIQUE NOT NULL,
         vendor_id UUID NOT NULL REFERENCES vendors (id) ON DELETE CASCADE,
-        name VARCHAR(225) NOT NULL,
-        email VARCHAR(225),
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
         phone VARCHAR(50),
         created_at TIMESTAMPTZ DEFAULT now ()
     );
@@ -76,11 +76,11 @@ CREATE TABLE
             risk_level IN ('Low', 'Medium', 'High', 'Critical')
         ),
         security_risk_score DECIMAL(5, 2) NOT NULL CHECK (security_risk_score BETWEEN 0 AND 100),
-        financial_risk_score DECIMAL(5, 2) NOT NULL CHECK (security_risk_score BETWEEN 0 AND 100),
-        operational_risk_score DECIMAL(5, 2) NOT NULL CHECK (security_risk_score BETWEEN 0 AND 100),
-        legal_risk_score DECIMAL(5, 2) NOT NULL CHECK (security_risk_score BETWEEN 0 AND 100),
-        status VARCHAR(50) NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft', 'Reviewed', 'Approved',)),
-        note TEXT,
+        financial_risk_score DECIMAL(5, 2) NOT NULL CHECK (financial_risk_score BETWEEN 0 AND 100),
+        operational_risk_score DECIMAL(5, 2) NOT NULL CHECK (operational_risk_score BETWEEN 0 AND 100),
+        legal_risk_score DECIMAL(5, 2) NOT NULL CHECK (legal_risk_score BETWEEN 0 AND 100),
+        status VARCHAR(50) NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft', 'Reviewed', 'Approved')),
+        notes TEXT,
         created_at TIMESTAMPTZ DEFAULT now (),
         updated_at TIMESTAMPTZ DEFAULT now ()
     );
@@ -93,12 +93,12 @@ CREATE TABLE
         certification_type VARCHAR(50) NOT NULL CHECK (
             certification_type IN ('ISO27001', 'SOC2', 'GDPR', 'PCI_DSS')
         ),
-        status VARCHAR(50) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Expired', 'Approved',)),
+        status VARCHAR(20) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Expired')),
         valid_from DATE,
         valid_until DATE,
-        issued_by VARCHAR(50),
+        issued_by VARCHAR(255),
         evidence_url TEXT,
-        review_by UUID REFERENCES users (id),
+        reviewed_by UUID REFERENCES users (id),
         created_at TIMESTAMPTZ DEFAULT now (),
         updated_at TIMESTAMPTZ DEFAULT now (),
         CONSTRAINT unique_vendor_cert UNIQUE (vendor_id, certification_type, status)
@@ -112,12 +112,12 @@ CREATE TABLE
         contract_number VARCHAR(100) NOT NULL,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
-        contract_value DECIMAL(5, 2),
+        contract_value DECIMAL(15, 2),
         renewal_status VARCHAR(50) NOT NULL DEFAULT 'Manual' CHECK (
-            renewal_status IN ('Manual', 'Auto-Renew', 'Expiring')
+            renewal_status IN ('Auto-Renew', 'Manual', 'Expiring')
         ),
         created_at TIMESTAMPTZ DEFAULT now (),
-        updated_at TIMESTAMPTZ DEFAULT now (),
+        updated_at TIMESTAMPTZ DEFAULT now ()
     );
 
 CREATE TABLE
@@ -126,7 +126,7 @@ CREATE TABLE
         code VARCHAR(20) UNIQUE NOT NULL,
         table_name VARCHAR(100) NOT NULL,
         record_id UUID NOT NULL,
-        action VARCHAR(20) NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'Delete')),
+        action VARCHAR(20) NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'DELETE')),
         field_name VARCHAR(100),
         old_value TEXT,
         new_value TEXT,
