@@ -6,21 +6,19 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
+	chim "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/uswuth/vytora-backend/internal/config"
 	"github.com/uswuth/vytora-backend/internal/database"
 	"github.com/uswuth/vytora-backend/internal/handlers"
-	middlewareauth "github.com/uswuth/vytora-backend/internal/middleware/auth"
+	"github.com/uswuth/vytora-backend/internal/middleware" // for auth and rbac
 	"github.com/uswuth/vytora-backend/internal/repository"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
 func main() {
-	// Load config
 	cfg := config.Load()
 
-	// Connect to database
 	if err := database.Connect(cfg.DatabaseURL); err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
@@ -28,20 +26,22 @@ func main() {
 
 	// Repositories
 	userRepo := repository.NewUserRepository(database.Pool)
+	vendorRepo := repository.NewVendorRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
+	seqService := services.NewSequenceService(database.Pool)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
+	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService)
 
-	// Router
 	r := chi.NewRouter()
 
 	// Global middleware
-	r.Use(chimw.Logger)
-	r.Use(chimw.Recoverer)
-	r.Use(chimw.RequestID)
+	r.Use(chim.Logger)
+	r.Use(chim.Recoverer)
+	r.Use(chim.RequestID)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -57,14 +57,21 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Protected routes (example)
+	// Protected routes (JWT required)
 	r.Group(func(r chi.Router) {
-		r.Use(middlewareauth.AuthMiddleware(jwtService))
+		r.Use(middleware.AuthMiddleware(jwtService))
+
 		r.Get("/api/v1/me", func(w http.ResponseWriter, r *http.Request) {
-			claims := r.Context().Value(middlewareauth.UserContextKey).(*services.Claims)
+			claims := r.Context().Value(middleware.UserContextKey).(*services.Claims)
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"user_id":"%s","code":"%s","email":"%s","role":"%s"}`,
 				claims.UserID, claims.Code, claims.Email, claims.Role)
+		})
+
+		// Vendor routes – requires canCreateVendor
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canCreateVendor"))
+			r.Post("/api/v1/vendors", vendorHandler.Create)
 		})
 	})
 
