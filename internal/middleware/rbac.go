@@ -6,6 +6,10 @@ import (
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
+type contextKey string
+
+const UserContextKey contextKey = "user"
+
 func RequirePermission(permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
