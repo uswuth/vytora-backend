@@ -28,6 +28,7 @@ func main() {
 	userRepo := repository.NewUserRepository(database.Pool)
 	vendorRepo := repository.NewVendorRepository(database.Pool)
 	riskAssessmentRepo := repository.NewRiskAssessmentRepository(database.Pool)
+	compRepo := repository.NewComplianceRecordRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -37,6 +38,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
 	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService)
 	riskAssessmentHandler := handlers.NewRiskAssessmentHandler(riskAssessmentRepo, vendorRepo, seqService)
+	compHandler := handlers.NewComplianceRecordHandler(compRepo, vendorRepo, seqService)
 
 	r := chi.NewRouter()
 
@@ -103,6 +105,16 @@ func main() {
 			r.Use(middleware.RequirePermission("canApproveRisk"))
 			r.Put("/api/v1/risk-assessments/{code}/approve", riskAssessmentHandler.Approve)
 		})
+
+		// Compliance routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canReviewCompliance"))
+			r.Post("/api/v1/compliance", compHandler.Create)
+			r.Get("/api/v1/compliance", compHandler.List)
+			r.Get("/api/v1/compliance/{code}", compHandler.Get)
+			r.Put("/api/v1/compliance/{code}", compHandler.Update)
+		})
+		r.Get("/api/v1/compliance/expiring", compHandler.Expiring) // read access for anyone authenticated
 	})
 
 	fmt.Println("VRMP server starting on http://localhost:8080")
