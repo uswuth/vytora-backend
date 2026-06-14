@@ -66,4 +66,4 @@ coverage/
 .turbo/
 
 # custom
-.html
+*.html
