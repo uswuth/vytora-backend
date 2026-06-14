@@ -9,9 +9,6 @@
 *.dll
 *.so
 *.dylib
-/vytora-backend
-/server
-/seed
 
 # Test binaries
 *.test
