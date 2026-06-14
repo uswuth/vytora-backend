@@ -1,0 +1,69 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/vytora-backend
+/server
+/seed
+
+# Test binaries
+*.test
+*.out
+
+# Go coverage
+coverage.out
+coverage.html
+
+# Dependencies
+vendor/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp and logs
+tmp/
+temp/
+logs/
+*.log
+
+# Binary directories
+/bin/
+/dist/
+
+# Compiled binaries
+*.exe
+*.test
+*.o
+*.a
+
+# Dependency directories
+node_modules/
+
+# Build output
+build/
+
+# Coverage
+coverage/
+
+# Cache
+.cache/
+.turbo/
+
+# custom
+.html
