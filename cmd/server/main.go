@@ -27,6 +27,7 @@ func main() {
 	// Repositories
 	userRepo := repository.NewUserRepository(database.Pool)
 	vendorRepo := repository.NewVendorRepository(database.Pool)
+	riskAssessmentRepo := repository.NewRiskAssessmentRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -35,6 +36,7 @@ func main() {
 	// Handlers
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
 	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService)
+	riskAssessmentHandler := handlers.NewRiskAssessmentHandler(riskAssessmentRepo, vendorRepo, seqService)
 
 	r := chi.NewRouter()
 
@@ -76,7 +78,7 @@ func main() {
 
 		// These can have separate RBAC checks
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canEditVendor"))   // covers view + edit for now
+			r.Use(middleware.RequirePermission("canEditVendor")) // covers view + edit for now
 			r.Get("/api/v1/vendors", vendorHandler.List)
 			r.Get("/api/v1/vendors/{code}", vendorHandler.Get)
 			r.Put("/api/v1/vendors/{code}", vendorHandler.Update)
@@ -85,6 +87,21 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission("canDeleteVendor"))
 			r.Delete("/api/v1/vendors/{code}", vendorHandler.Delete)
+		})
+
+		// Risk Assessment routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canCreateRiskAssessment"))
+			r.Post("/api/v1/risk-assessments", riskAssessmentHandler.Create)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canReviewRisk")) // also used for view list/detail
+			r.Get("/api/v1/risk-assessments", riskAssessmentHandler.List)
+			r.Get("/api/v1/risk-assessments/{code}", riskAssessmentHandler.Get)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canApproveRisk"))
+			r.Put("/api/v1/risk-assessments/{code}/approve", riskAssessmentHandler.Approve)
 		})
 	})
 

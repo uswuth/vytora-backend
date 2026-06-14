@@ -5,6 +5,10 @@ var RolePermissions = map[string][]string{
 		"canCreateVendor", "canEditVendor", "canDeleteVendor",
 		"canManageUsers", "canManageRoles", "canAccessAllReports",
 		"canConfigureSystem",
+		"canCreateRiskAssessment", "canReviewRisk", "canApproveRisk",
+		"canReviewCompliance", "canTrackCertifications",
+		"canSubmitVendorRequest", "canViewAssignedVendors",
+		"canViewAuditHistory", "canDownloadReports",
 	},
 	"risk_manager": {
 		"canCreateRiskAssessment", "canReviewRisk", "canApproveRisk",
