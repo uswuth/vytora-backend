@@ -31,6 +31,7 @@ func main() {
 	compRepo := repository.NewComplianceRecordRepository(database.Pool)
 	contractRepo := repository.NewContractRepository(database.Pool)
 	auditRepo := repository.NewAuditTrailRepository(database.Pool)
+	auditHandler := handlers.NewAuditHandler(auditRepo)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -150,7 +151,12 @@ func main() {
 			r.Use(middleware.RequirePermission("canEditVendor")) // reject can be done by anyone with edit permission for now
 			r.Put("/api/v1/vendors/{code}/reject", workflowHandler.Reject)
 		})
-
+		
+		// Audit trail (read-only)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canViewAuditHistory"))
+			r.Get("/api/v1/audit", auditHandler.List)
+		})
 	})
 
 	fmt.Println("VRMP server starting on http://localhost:8080")
