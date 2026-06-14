@@ -30,6 +30,7 @@ func main() {
 	riskAssessmentRepo := repository.NewRiskAssessmentRepository(database.Pool)
 	compRepo := repository.NewComplianceRecordRepository(database.Pool)
 	contractRepo := repository.NewContractRepository(database.Pool)
+	auditRepo := repository.NewAuditTrailRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -41,6 +42,7 @@ func main() {
 	riskAssessmentHandler := handlers.NewRiskAssessmentHandler(riskAssessmentRepo, vendorRepo, seqService)
 	compHandler := handlers.NewComplianceRecordHandler(compRepo, vendorRepo, seqService)
 	contractHandler := handlers.NewContractHandler(contractRepo, vendorRepo, seqService)
+	workflowHandler := handlers.NewWorkflowHandler(vendorRepo, auditRepo, seqService)
 
 	r := chi.NewRouter()
 
@@ -126,6 +128,28 @@ func main() {
 			r.Get("/api/v1/contracts/{code}", contractHandler.Get)
 		})
 		r.Get("/api/v1/contracts/expiring", contractHandler.Expiring) // read-only for authenticated users
+
+		// Workflow routes – each transition uses the role‑specific permission
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canSubmitVendorRequest"))
+			r.Put("/api/v1/vendors/{code}/submit", workflowHandler.Submit)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canReviewRisk"))
+			r.Put("/api/v1/vendors/{code}/review-risk", workflowHandler.ReviewRisk)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canReviewCompliance"))
+			r.Put("/api/v1/vendors/{code}/review-compliance", workflowHandler.ReviewCompliance)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canEditVendor")) // admin approves
+			r.Put("/api/v1/vendors/{code}/approve", workflowHandler.Approve)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canEditVendor")) // reject can be done by anyone with edit permission for now
+			r.Put("/api/v1/vendors/{code}/reject", workflowHandler.Reject)
+		})
 
 	})
 

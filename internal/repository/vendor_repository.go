@@ -187,6 +187,12 @@ func (r *VendorRepository) Update(ctx context.Context, vendor *models.Vendor) er
 	return nil
 }
 
+// UpdateStatus changes only the status field (used by workflow).
+func (r *VendorRepository) UpdateStatus(ctx context.Context, code, status string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE vendors SET status=$1, updated_at=NOW() WHERE code=$2`, status, code)
+	return err
+}
+
 // Delete removes a vendor by code.
 func (r *VendorRepository) Delete(ctx context.Context, code string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM vendors WHERE code = $1`, code)
