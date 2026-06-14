@@ -1,0 +1,5 @@
+<div>
+    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+     $env:DATABASE_URL="postgres://postgres:devpass@localhost:5432/vrmp?sslmode=disable" 
+    migrate -path migrations -database $env:DATABASE_URL up
+</div>
