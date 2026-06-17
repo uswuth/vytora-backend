@@ -1,26 +1,34 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chim "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/rs/zerolog"
 	"github.com/uswuth/vytora-backend/internal/config"
 	"github.com/uswuth/vytora-backend/internal/database"
 	"github.com/uswuth/vytora-backend/internal/handlers"
-	"github.com/uswuth/vytora-backend/internal/middleware" // auth + rbac
+	"github.com/uswuth/vytora-backend/internal/middleware"
 	"github.com/uswuth/vytora-backend/internal/repository"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
 func main() {
+	// Setup logger
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+
 	cfg := config.Load()
 
 	if err := database.Connect(cfg.DatabaseURL); err != nil {
-		log.Fatalf("Database connection failed: %v", err)
+		logger.Fatal().Err(err).Msg("Database connection failed")
 	}
 	defer database.Close()
 
@@ -31,7 +39,7 @@ func main() {
 	compRepo := repository.NewComplianceRecordRepository(database.Pool)
 	contractRepo := repository.NewContractRepository(database.Pool)
 	auditRepo := repository.NewAuditTrailRepository(database.Pool)
-	auditHandler := handlers.NewAuditHandler(auditRepo)
+	reportRepo := repository.NewReportRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -44,13 +52,16 @@ func main() {
 	compHandler := handlers.NewComplianceRecordHandler(compRepo, vendorRepo, seqService)
 	contractHandler := handlers.NewContractHandler(contractRepo, vendorRepo, seqService)
 	workflowHandler := handlers.NewWorkflowHandler(vendorRepo, auditRepo, seqService)
+	auditHandler := handlers.NewAuditHandler(auditRepo)
+	reportHandler := handlers.NewReportHandler(reportRepo)
+	userManagementHandler := handlers.NewUserManagementHandler(userRepo, seqService)
 
 	r := chi.NewRouter()
 
 	// Global middleware
-	r.Use(chim.Logger)
-	r.Use(chim.Recoverer)
 	r.Use(chim.RequestID)
+	r.Use(middleware.StructuredLogger(logger))
+	r.Use(chim.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -59,11 +70,35 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	// Rate limiter: 100 requests per minute
+	limiter := middleware.NewRateLimiter(100, time.Minute)
+	r.Use(limiter.Middleware)
+
+	// Health check (also pings DB)
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := database.Pool.Ping(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"status":"unhealthy","error":"database unreachable"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"healthy"}`))
+	})
+
 	// Public routes
 	r.Post("/api/v1/login", authHandler.Login)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+	
+	// User management (admin only)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequirePermission("canManageUsers"))
+		r.Post("/api/v1/users", userManagementHandler.Create)
+		r.Get("/api/v1/users", userManagementHandler.List)
+		r.Get("/api/v1/users/{id}", userManagementHandler.Get)
+		r.Put("/api/v1/users/{id}/role", userManagementHandler.UpdateRole)
+		r.Put("/api/v1/users/{id}/deactivate", userManagementHandler.Deactivate)
+		r.Put("/api/v1/users/{id}/activate", userManagementHandler.Activate)
 	})
 
 	// Protected routes (JWT required)
@@ -77,60 +112,23 @@ func main() {
 				claims.UserID, claims.Code, claims.Email, claims.Role)
 		})
 
-		// Vendor routes – with RBAC
+		// Vendor routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission("canCreateVendor"))
 			r.Post("/api/v1/vendors", vendorHandler.Create)
 		})
-
-		// These can have separate RBAC checks
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canEditVendor")) // covers view + edit for now
+			r.Use(middleware.RequirePermission("canEditVendor"))
 			r.Get("/api/v1/vendors", vendorHandler.List)
 			r.Get("/api/v1/vendors/{code}", vendorHandler.Get)
 			r.Put("/api/v1/vendors/{code}", vendorHandler.Update)
 		})
-
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission("canDeleteVendor"))
 			r.Delete("/api/v1/vendors/{code}", vendorHandler.Delete)
 		})
 
-		// Risk Assessment routes
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canCreateRiskAssessment"))
-			r.Post("/api/v1/risk-assessments", riskAssessmentHandler.Create)
-		})
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canReviewRisk")) // also used for view list/detail
-			r.Get("/api/v1/risk-assessments", riskAssessmentHandler.List)
-			r.Get("/api/v1/risk-assessments/{code}", riskAssessmentHandler.Get)
-		})
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canApproveRisk"))
-			r.Put("/api/v1/risk-assessments/{code}/approve", riskAssessmentHandler.Approve)
-		})
-
-		// Compliance routes
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canReviewCompliance"))
-			r.Post("/api/v1/compliance", compHandler.Create)
-			r.Get("/api/v1/compliance", compHandler.List)
-			r.Get("/api/v1/compliance/{code}", compHandler.Get)
-			r.Put("/api/v1/compliance/{code}", compHandler.Update)
-		})
-		r.Get("/api/v1/compliance/expiring", compHandler.Expiring) // read access for anyone authenticated
-
-		// Contract routes
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canEditVendor")) // reuse edit permission for contracts
-			r.Post("/api/v1/contracts", contractHandler.Create)
-			r.Get("/api/v1/contracts", contractHandler.List)
-			r.Get("/api/v1/contracts/{code}", contractHandler.Get)
-		})
-		r.Get("/api/v1/contracts/expiring", contractHandler.Expiring) // read-only for authenticated users
-
-		// Workflow routes – each transition uses the role‑specific permission
+		// Workflow
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission("canSubmitVendorRequest"))
 			r.Put("/api/v1/vendors/{code}/submit", workflowHandler.Submit)
@@ -144,21 +142,90 @@ func main() {
 			r.Put("/api/v1/vendors/{code}/review-compliance", workflowHandler.ReviewCompliance)
 		})
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canEditVendor")) // admin approves
+			r.Use(middleware.RequirePermission("canEditVendor"))
 			r.Put("/api/v1/vendors/{code}/approve", workflowHandler.Approve)
-		})
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission("canEditVendor")) // reject can be done by anyone with edit permission for now
 			r.Put("/api/v1/vendors/{code}/reject", workflowHandler.Reject)
 		})
-		
-		// Audit trail (read-only)
+
+		// Risk assessments
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canCreateRiskAssessment"))
+			r.Post("/api/v1/risk-assessments", riskAssessmentHandler.Create)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canReviewRisk"))
+			r.Get("/api/v1/risk-assessments", riskAssessmentHandler.List)
+			r.Get("/api/v1/risk-assessments/{code}", riskAssessmentHandler.Get)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canApproveRisk"))
+			r.Put("/api/v1/risk-assessments/{code}/approve", riskAssessmentHandler.Approve)
+		})
+
+		// Compliance
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canReviewCompliance"))
+			r.Post("/api/v1/compliance", compHandler.Create)
+			r.Get("/api/v1/compliance", compHandler.List)
+			r.Get("/api/v1/compliance/{code}", compHandler.Get)
+			r.Put("/api/v1/compliance/{code}", compHandler.Update)
+		})
+		r.Get("/api/v1/compliance/expiring", compHandler.Expiring)
+
+		// Contracts
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canEditVendor"))
+			r.Post("/api/v1/contracts", contractHandler.Create)
+			r.Get("/api/v1/contracts", contractHandler.List)
+			r.Get("/api/v1/contracts/{code}", contractHandler.Get)
+		})
+		r.Get("/api/v1/contracts/expiring", contractHandler.Expiring)
+
+		// Audit
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission("canViewAuditHistory"))
 			r.Get("/api/v1/audit", auditHandler.List)
 		})
+
+		// Reports
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canAccessAllReports"))
+			r.Get("/api/v1/reports/summary", reportHandler.Summary)
+			r.Get("/api/v1/reports/monthly-onboarding", reportHandler.MonthlyOnboarding)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canViewAssignedVendors"))
+			r.Get("/api/v1/reports/summary", reportHandler.Summary)
+			r.Get("/api/v1/reports/monthly-onboarding", reportHandler.MonthlyOnboarding)
+		})
 	})
 
-	fmt.Println("VRMP server starting on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	// Start server with graceful shutdown
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		logger.Info().Msg("VRMP server starting on http://localhost:8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal().Err(err).Msg("server start failed")
+		}
+	}()
+
+	// Wait for shutdown signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info().Msg("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Fatal().Err(err).Msg("forced shutdown")
+	}
+	logger.Info().Msg("Server stopped")
 }

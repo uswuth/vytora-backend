@@ -60,7 +60,10 @@ func (s *SequenceService) NextCode(ctx context.Context, entityName string) (stri
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch next sequence: %w", err)
 	}
-
+	
 	code := fmt.Sprintf("%s%0*d", prefix, digits, nextVal)
 	return code, nil
+}
+func formatCode(prefix string, digits int, val int) string {
+	return fmt.Sprintf("%s%0*d", prefix, digits, val)
 }

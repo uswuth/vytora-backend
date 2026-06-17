@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,16 +33,15 @@ func NewRiskAssessmentHandler(raRepo *repository.RiskAssessmentRepository, vendo
 }
 
 type CreateRiskAssessmentRequest struct {
-	VendorCode         string  `json:"vendor_code" validate:"required"`
-	SecurityRiskScore  float64 `json:"security_risk_score" validate:"required,min=0,max=100"`
-	FinancialRiskScore float64 `json:"financial_risk_score" validate:"required,min=0,max=100"`
+	VendorCode          string  `json:"vendor_code" validate:"required"`
+	SecurityRiskScore   float64 `json:"security_risk_score" validate:"required,min=0,max=100"`
+	FinancialRiskScore  float64 `json:"financial_risk_score" validate:"required,min=0,max=100"`
 	OperationalRiskScore float64 `json:"operational_risk_score" validate:"required,min=0,max=100"`
-	LegalRiskScore     float64 `json:"legal_risk_score" validate:"required,min=0,max=100"`
-	AssessmentDate     string  `json:"assessment_date" validate:"required"` // YYYY-MM-DD
-	Notes              string  `json:"notes"`
+	LegalRiskScore      float64 `json:"legal_risk_score" validate:"required,min=0,max=100"`
+	AssessmentDate      string  `json:"assessment_date" validate:"required"` // YYYY-MM-DD
+	Notes               string  `json:"notes"`
 }
 
-// Calculate overall score and map to level
 func calculateRiskLevel(score float64) string {
 	switch {
 	case score <= 25:
@@ -54,7 +54,7 @@ func calculateRiskLevel(score float64) string {
 		return "Critical"
 	}
 }
-// Create
+
 func (h *RiskAssessmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateRiskAssessmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -110,9 +110,13 @@ func (h *RiskAssessmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.raRepo.Create(r.Context(), ra); err != nil {
-		http.Error(w, `{"error":"failed to create risk assessment"}`, http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
 		return
 	}
+
+	// Inject human-readable codes for the response
+	ra.VendorCode = vendor.Code
+	ra.AssessorCode = claims.Code
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

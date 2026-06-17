@@ -21,6 +21,6 @@ var RolePermissions = map[string][]string{
 		"canSubmitVendorRequest", "canViewAssignedVendors", "canRequestVendorReview",
 	},
 	"auditor": {
-		"canViewAuditHistory", "canDownloadReports",
+		"canViewAuditHistory", "canDownloadReports", "canAccessAllReports",
 	},
 }
