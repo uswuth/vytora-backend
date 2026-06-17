@@ -15,9 +15,16 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/uswuth/vytora-backend/internal/config"
 	"github.com/uswuth/vytora-backend/internal/database"
+	"github.com/uswuth/vytora-backend/internal/entity/audit_trail"
+	"github.com/uswuth/vytora-backend/internal/entity/category"
+	"github.com/uswuth/vytora-backend/internal/entity/compliance_record"
+	"github.com/uswuth/vytora-backend/internal/entity/contract"
+	"github.com/uswuth/vytora-backend/internal/entity/report"
+	"github.com/uswuth/vytora-backend/internal/entity/risk_assessment"
+	"github.com/uswuth/vytora-backend/internal/entity/user"
+	"github.com/uswuth/vytora-backend/internal/entity/vendor"
 	"github.com/uswuth/vytora-backend/internal/handlers"
 	"github.com/uswuth/vytora-backend/internal/middleware"
-	"github.com/uswuth/vytora-backend/internal/repository"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
@@ -33,14 +40,14 @@ func main() {
 	defer database.Close()
 
 	// Repositories
-	userRepo := repository.NewUserRepository(database.Pool)
-	vendorRepo := repository.NewVendorRepository(database.Pool)
-	riskAssessmentRepo := repository.NewRiskAssessmentRepository(database.Pool)
-	compRepo := repository.NewComplianceRecordRepository(database.Pool)
-	contractRepo := repository.NewContractRepository(database.Pool)
-	auditRepo := repository.NewAuditTrailRepository(database.Pool)
-	reportRepo := repository.NewReportRepository(database.Pool)
-	categoryRepo := repository.NewCategoryRepository(database.Pool)
+	userRepo := user.NewRepository(database.Pool)
+	vendorRepo := vendor.NewRepository(database.Pool)
+	riskAssessmentRepo := risk_assessment.NewRepository(database.Pool)
+	compRepo := compliance_record.NewRepository(database.Pool)
+	contractRepo := contract.NewRepository(database.Pool)
+	auditRepo := audit_trail.NewRepository(database.Pool)
+	reportRepo := report.NewRepository(database.Pool)
+	categoryRepo := category.NewRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -48,15 +55,15 @@ func main() {
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
-	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService, categoryRepo)
-	riskAssessmentHandler := handlers.NewRiskAssessmentHandler(riskAssessmentRepo, vendorRepo, seqService)
-	compHandler := handlers.NewComplianceRecordHandler(compRepo, vendorRepo, seqService)
-	contractHandler := handlers.NewContractHandler(contractRepo, vendorRepo, seqService)
-	workflowHandler := handlers.NewWorkflowHandler(vendorRepo, auditRepo, seqService)
-	auditHandler := handlers.NewAuditHandler(auditRepo)
-	reportHandler := handlers.NewReportHandler(reportRepo)
-	userManagementHandler := handlers.NewUserManagementHandler(userRepo, seqService)
-	categoryHandler := handlers.NewCategoryHandler(categoryRepo, seqService)
+	userManagementHandler := user.NewHandler(userRepo, seqService.NextCode)
+	vendorHandler := vendor.NewHandler(vendorRepo, categoryRepo, seqService.NextCode)
+	riskAssessmentHandler := risk_assessment.NewHandler(riskAssessmentRepo, vendorRepo, seqService.NextCode)
+	compHandler := compliance_record.NewHandler(compRepo, vendorRepo, seqService.NextCode)
+	contractHandler := contract.NewHandler(contractRepo, vendorRepo, seqService.NextCode)
+	workflowHandler := vendor.NewWorkflowHandler(vendorRepo, auditRepo, seqService.NextCode)
+	auditHandler := audit_trail.NewHandler(auditRepo)
+	reportHandler := report.NewHandler(reportRepo)
+	categoryHandler := category.NewHandler(categoryRepo, seqService.NextCode)
 
 	r := chi.NewRouter()
 

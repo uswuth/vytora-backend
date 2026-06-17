@@ -5,28 +5,27 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/uswuth/vytora-backend/internal/models"
-	"github.com/uswuth/vytora-backend/internal/repository"
+	"github.com/uswuth/vytora-backend/internal/entity/user"
 	"github.com/uswuth/vytora-backend/internal/services"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
-	userRepo   *repository.UserRepository
-	jwtService *services.JWTService
-	validate   *validator.Validate
+	userRepo    *user.Repository
+	jwtService  *services.JWTService
+	validate    *validator.Validate
 }
 
-func NewAuthHandler(userRepo *repository.UserRepository, jwtService *services.JWTService) *AuthHandler {
+func NewAuthHandler(userRepo *user.Repository, jwtService *services.JWTService) *AuthHandler {
 	return &AuthHandler{
-		userRepo:   userRepo,
-		jwtService: jwtService,
-		validate:   validator.New(),
+		userRepo:    userRepo,
+		jwtService:  jwtService,
+		validate:    validator.New(),
 	}
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req models.LoginRequest
+	var req user.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusUnauthorized)
 		return
@@ -35,27 +34,27 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
 		return
 	}
-	user, err := h.userRepo.FindByEmail(r.Context(), req.Email)
+	u, err := h.userRepo.FindByEmail(r.Context(), req.Email)
 	if err != nil {
 		http.Error(w, `{"error": "invalid email or password"}`, http.StatusUnauthorized)
 		return
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
 		http.Error(w, `{"error":"invalid email or password"}`, http.StatusUnauthorized)
 		return
 	}
-	if !user.IsActive {
+	if !u.IsActive {
 		http.Error(w, `{"error":"account is deactivated"}`, http.StatusForbidden)
 		return
 	}
-	token, err := h.jwtService.GenerateToken(user)
+	token, err := h.jwtService.GenerateToken(u)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
 	}
-	resp := models.LoginResponse{
+	resp := user.LoginResponse{
 		Token: token,
-		User:  *user,
+		User:  *u,
 	}
 	w.Header().Set("Context-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

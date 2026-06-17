@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/uswuth/vytora-backend/internal/models"
+	"github.com/uswuth/vytora-backend/internal/entity/user"
 )
 
 type JWTService struct {
@@ -24,7 +24,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func (s *JWTService) GenerateToken(user *models.User) (string, error) {
+func (s *JWTService) GenerateToken(user *user.User) (string, error) {
 	claims := &Claims{
 		UserID: user.ID.String(),
 		Code:   user.Code,
