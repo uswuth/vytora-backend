@@ -119,11 +119,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
-		Description string `json:"description"`
-		Status      string `json:"status" validate:"required,oneof=Draft Active Inactive"`
-	}
+	var req UpdateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return

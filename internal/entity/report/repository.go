@@ -24,8 +24,8 @@ func buildFilter(deptManagerID *uuid.UUID) (string, []interface{}, int) {
 	return "WHERE assigned_dept_manager_id = $1", []interface{}{*deptManagerID}, 2
 }
 
-func (r *Repository) GetSummary(ctx context.Context, deptManagerID *uuid.UUID) (*Summary, error) {
-	s := &Summary{
+func (r *Repository) GetSummary(ctx context.Context, deptManagerID *uuid.UUID) (*SummaryResponse, error) {
+	s := &SummaryResponse{
 		VendorsByStatus:    make(map[string]int),
 		VendorsByRiskLevel: make(map[string]int),
 	}
@@ -131,7 +131,7 @@ func (r *Repository) GetSummary(ctx context.Context, deptManagerID *uuid.UUID) (
 	return s, nil
 }
 
-func getExpiringContractField(days int, s *Summary) *int {
+func getExpiringContractField(days int, s *SummaryResponse) *int {
 	switch days {
 	case 30:
 		return &s.ExpiringContracts30
@@ -142,7 +142,7 @@ func getExpiringContractField(days int, s *Summary) *int {
 	}
 }
 
-func getExpiringComplianceField(days int, s *Summary) *int {
+func getExpiringComplianceField(days int, s *SummaryResponse) *int {
 	switch days {
 	case 30:
 		return &s.ExpiringCompliance30
@@ -153,7 +153,7 @@ func getExpiringComplianceField(days int, s *Summary) *int {
 	}
 }
 
-func (r *Repository) GetMonthlyOnboarding(ctx context.Context, deptManagerID *uuid.UUID) ([]MonthlyOnboarding, error) {
+func (r *Repository) GetMonthlyOnboarding(ctx context.Context, deptManagerID *uuid.UUID) ([]MonthlyOnboardingItem, error) {
 	whereClause, args, _ := buildFilter(deptManagerID)
 	query := fmt.Sprintf(`SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) FROM vendors %s GROUP BY month ORDER BY month`, whereClause)
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -162,9 +162,9 @@ func (r *Repository) GetMonthlyOnboarding(ctx context.Context, deptManagerID *uu
 	}
 	defer rows.Close()
 
-	var result []MonthlyOnboarding
+	var result []MonthlyOnboardingItem
 	for rows.Next() {
-		var m MonthlyOnboarding
+		var m MonthlyOnboardingItem
 		if err := rows.Scan(&m.Month, &m.Count); err != nil {
 			return nil, err
 		}

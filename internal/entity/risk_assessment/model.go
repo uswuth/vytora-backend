@@ -22,14 +22,6 @@ type RiskAssessment struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-type CreateRiskAssessmentRequest struct {
-	VendorCode      string `json:"vendor_code" validate:"required"`
-	AssessmentDate  string `json:"assessment_date" validate:"required"`
-	RiskLevel       string `json:"risk_level" validate:"required,oneof=Low Medium High Critical"`
-	Findings        string `json:"findings" validate:"required"`
-	Recommendations string `json:"recommendations"`
-}
-
 type UpdateRiskAssessmentRequest struct {
 	RiskLevel       string `json:"risk_level" validate:"required,oneof=Low Medium High Critical"`
 	Findings        string `json:"findings" validate:"required"`

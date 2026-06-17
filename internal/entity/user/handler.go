@@ -97,9 +97,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var req struct {
-		Role string `json:"role" validate:"required,oneof=system_admin risk_manager compliance_officer department_manager auditor"`
-	}
+	var req UpdateRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return

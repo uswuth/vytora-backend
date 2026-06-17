@@ -120,9 +120,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string]interface{}{
-		"data":  assessments,
-		"total": total,
+	resp := ListResponse{
+		Data:  assessments,
+		Total: total,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

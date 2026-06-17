@@ -38,9 +38,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string]interface{}{
-		"data":  audits,
-		"total": total,
+	resp := ListResponse{
+		Data:  audits,
+		Total: total,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
