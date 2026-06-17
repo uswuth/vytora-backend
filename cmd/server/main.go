@@ -40,6 +40,7 @@ func main() {
 	contractRepo := repository.NewContractRepository(database.Pool)
 	auditRepo := repository.NewAuditTrailRepository(database.Pool)
 	reportRepo := repository.NewReportRepository(database.Pool)
+	categoryRepo := repository.NewCategoryRepository(database.Pool)
 
 	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
@@ -47,7 +48,7 @@ func main() {
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
-	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService)
+	vendorHandler := handlers.NewVendorHandler(vendorRepo, seqService, categoryRepo)
 	riskAssessmentHandler := handlers.NewRiskAssessmentHandler(riskAssessmentRepo, vendorRepo, seqService)
 	compHandler := handlers.NewComplianceRecordHandler(compRepo, vendorRepo, seqService)
 	contractHandler := handlers.NewContractHandler(contractRepo, vendorRepo, seqService)
@@ -55,6 +56,7 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(auditRepo)
 	reportHandler := handlers.NewReportHandler(reportRepo)
 	userManagementHandler := handlers.NewUserManagementHandler(userRepo, seqService)
+	categoryHandler := handlers.NewCategoryHandler(categoryRepo, seqService)
 
 	r := chi.NewRouter()
 
@@ -89,7 +91,7 @@ func main() {
 
 	// Public routes
 	r.Post("/api/v1/login", authHandler.Login)
-	
+
 	// User management (admin only)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequirePermission("canManageUsers"))
@@ -197,6 +199,18 @@ func main() {
 			r.Use(middleware.RequirePermission("canViewAssignedVendors"))
 			r.Get("/api/v1/reports/summary", reportHandler.Summary)
 			r.Get("/api/v1/reports/monthly-onboarding", reportHandler.MonthlyOnboarding)
+		})
+		// Category routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canManageCategories"))
+			r.Post("/api/v1/categories", categoryHandler.Create)
+			r.Put("/api/v1/categories/{code}", categoryHandler.Update)
+			r.Delete("/api/v1/categories/{code}", categoryHandler.Delete)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission("canViewCategories"))
+			r.Get("/api/v1/categories", categoryHandler.List)
+			r.Get("/api/v1/categories/{code}", categoryHandler.Get)
 		})
 	})
 

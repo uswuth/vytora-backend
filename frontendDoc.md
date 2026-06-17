@@ -731,3 +731,192 @@ General Notes
     For bulk operations, frontend should respect pagination parameters (limit/offset).
 
 This document gives your frontend team everything they need to start building immediately. If any endpoint requires further clarification, let me know!
+User Management API
+
+Base URL: http://localhost:8080/api/v1/users
+Authentication: All endpoints require a valid JWT from a user with the canManageUsers permission (by default only system_admin).
+1. Create User
+
+Endpoint
+POST /api/v1/users
+
+Purpose
+Create a new user account with a specific role.
+
+Request Body
+Field	Type	Required	Validation
+email	string	Yes	Valid email
+password	string	Yes	Minimum 6 characters
+full_name	string	Yes	2‑255 characters
+role	string	Yes	One of: system_admin, risk_manager, compliance_officer, department_manager, auditor
+
+Sample Request
+json
+
+{
+  "email": "jane@vrmp.com",
+  "password": "secure123",
+  "full_name": "Jane Smith",
+  "role": "risk_manager"
+}
+
+Success Response (201)
+json
+
+{
+  "id": "uuid",
+  "code": "USR002",
+  "email": "jane@vrmp.com",
+  "full_name": "Jane Smith",
+  "role": "risk_manager",
+  "is_active": true,
+  "created_at": "2026-06-17T22:33:45+05:30",
+  "updated_at": "2026-06-17T22:33:45+05:30"
+}
+
+Note: password_hash is never returned.
+
+Error Responses
+
+    400 – Validation error (invalid email, role, etc.)
+
+    401 – Missing or invalid token
+
+    403 – User doesn’t have canManageUsers
+
+    500 – Server error
+
+2. List All Users
+
+Endpoint
+GET /api/v1/users
+
+Purpose
+Retrieve a list of all user accounts (passwords hidden).
+
+Success Response (200)
+json
+
+[
+  {
+    "id": "uuid",
+    "code": "USR001",
+    "email": "admin@vrmp.com",
+    "full_name": "System Administrator",
+    "role": "system_admin",
+    "is_active": true,
+    "created_at": "2026-06-14T03:08:31+05:30",
+    "updated_at": "2026-06-14T03:08:31+05:30"
+  },
+  {
+    "id": "uuid",
+    "code": "USR002",
+    "email": "jane@vrmp.com",
+    "full_name": "Jane Smith",
+    "role": "risk_manager",
+    "is_active": true,
+    "created_at": "2026-06-17T22:33:45+05:30",
+    "updated_at": "2026-06-17T22:33:45+05:30"
+  }
+]
+
+Error Responses
+
+    401, 403
+
+3. Get User by ID
+
+Endpoint
+GET /api/v1/users/{id}
+
+Purpose
+Fetch a single user’s details by their UUID.
+
+Example
+GET /api/v1/users/550e8400-e29b-41d4-a716-446655440000
+
+Success Response (200)
+Same user object as above.
+
+Error Responses
+
+    404 – {"error":"user not found"}
+
+4. Change User Role
+
+Endpoint
+PUT /api/v1/users/{id}/role
+
+Purpose
+Update the role assigned to a user.
+
+Request Body
+Field	Type	Required	Validation
+role	string	Yes	One of: system_admin, risk_manager, compliance_officer, department_manager, auditor
+
+Sample Request
+json
+
+{
+  "role": "compliance_officer"
+}
+
+Success Response
+204 No Content
+
+Error Responses
+
+    400 – Invalid role
+
+    404 – User not found
+
+    403
+
+5. Deactivate User
+
+Endpoint
+PUT /api/v1/users/{id}/deactivate
+
+Purpose
+Soft‑disable a user account (sets is_active = false). Deactivated users cannot log in.
+
+Success Response
+204 No Content
+
+Error Responses
+
+    404, 403
+
+6. Activate User
+
+Endpoint
+PUT /api/v1/users/{id}/activate
+
+Purpose
+Re‑enable a previously deactivated account (sets is_active = true).
+
+Success Response
+204 No Content
+
+Error Responses
+
+    404, 403
+
+Notes for Frontend
+
+    User IDs are UUIDs – use the id field from the list response, not code, for user management endpoints.
+
+    The user’s human‑readable code (e.g., USR002) is returned and can be shown in the UI, but is not used for identification in these endpoints.
+
+    Roles are case‑sensitive – always use lowercase with underscores (system_admin, risk_manager, etc.).
+
+    Only an admin (or a role with canManageUsers) can access these endpoints.
+
+Method	URL	Permission	Description
+POST	/api/v1/categories	canManageCategories	Create category
+GET	/api/v1/categories	canViewCategories	List/search categories
+GET	/api/v1/categories/{code}	canViewCategories	Get by code
+PUT	/api/v1/categories/{code}	canManageCategories	Update
+DELETE	/api/v1/categories/{code}	canManageCategories	Delete
+
+Now all entities that have a category field (vendors, and potentially others later) can validate against this central list.

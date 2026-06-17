@@ -17,16 +17,18 @@ import (
 )
 
 type VendorHandler struct {
-	vendorRepo *repository.VendorRepository
-	seqService *services.SequenceService
-	validate   *validator.Validate
+	vendorRepo   *repository.VendorRepository
+	seqService   *services.SequenceService
+	validate     *validator.Validate
+	categoryRepo *repository.CategoryRepository   // ADD THIS
 }
 
-func NewVendorHandler(vendorRepo *repository.VendorRepository, seqService *services.SequenceService) *VendorHandler {
+func NewVendorHandler(vendorRepo *repository.VendorRepository, seqService *services.SequenceService, categoryRepo *repository.CategoryRepository) *VendorHandler {
 	return &VendorHandler{
-		vendorRepo: vendorRepo,
-		seqService: seqService,
-		validate:   validator.New(),
+		vendorRepo:   vendorRepo,
+		seqService:   seqService,
+		validate:     validator.New(),
+		categoryRepo: categoryRepo,
 	}
 }
 
@@ -61,6 +63,14 @@ func (h *VendorHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := h.validate.Struct(req); err != nil {
 		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
 		return
+	}
+
+	if req.Category != "" {
+		active, err := h.categoryRepo.IsActive(r.Context(), req.Category)
+		if err != nil || !active {
+			http.Error(w, `{"error":"category not found or inactive"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	code, err := h.seqService.NextCode(r.Context(), "vendor")
@@ -154,6 +164,14 @@ func (h *VendorHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := h.validate.Struct(req); err != nil {
 		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
 		return
+	}
+
+	if req.Category != "" {
+		active, err := h.categoryRepo.IsActive(r.Context(), req.Category)
+		if err != nil || !active {
+			http.Error(w, `{"error":"category not found or inactive"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Fetch existing vendor (optional, but ensures it exists)
