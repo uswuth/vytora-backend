@@ -33,6 +33,7 @@ func main() {
 	}
 	defer database.Close()
 
+	// repo
 	userRepo := user.NewRepository(database.Pool)
 	vendorRepo := vendor.NewRepository(database.Pool)
 	riskAssessmentRepo := risk_assessment.NewRepository(database.Pool)
@@ -50,6 +51,7 @@ func main() {
 	logger.Info().Str("jwt_secret_prefix", secretPrefix).Msg("JWT secret loaded")
 	seqService := services.NewSequenceService(database.Pool)
 
+	// handler
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
 	userManagementHandler := user.NewHandler(userRepo, seqService.NextCode)
 	vendorHandler := vendor.NewHandler(vendorRepo, categoryRepo, seqService.NextCode)
