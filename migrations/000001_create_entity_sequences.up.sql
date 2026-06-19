@@ -13,4 +13,5 @@ VALUES
     ('risk_assessment', 1),
     ('compliance_record', 1),
     ('contract', 1),
-    ('audit_trail', 1);
+    ('audit_trail', 1),
+    ('category', 1);

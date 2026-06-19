@@ -53,7 +53,10 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 	}
 
 	if err := h.repo.Create(c.Context(), user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create user"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "failed to create user",
+			"details": err.Error(),
+		})
 	}
 
 	user.PasswordHash = ""

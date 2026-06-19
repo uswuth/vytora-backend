@@ -93,6 +93,58 @@ func (h *Handler) List(c *fiber.Ctx) error {
 	return c.JSON(contracts)
 }
 
+func (h *Handler) Update(c *fiber.Ctx) error {
+	code := c.Params("code")
+	contract, err := h.contractRepo.FindByCode(c.Context(), code)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "contract not found"})
+	}
+
+	var req CreateContractRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	if err := h.validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
+	}
+
+	v, err := h.vendorRepo.FindByCode(c.Context(), req.VendorCode)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "vendor not found"})
+	}
+
+	start, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid start_date format"})
+	}
+	end, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid end_date format"})
+	}
+
+	contract.VendorID = v.ID
+	contract.VendorCode = v.Code
+	contract.ContractNumber = req.ContractNumber
+	contract.StartDate = start
+	contract.EndDate = end
+	contract.ContractValue = req.ContractValue
+	contract.RenewalStatus = req.RenewalStatus
+
+	if err := h.contractRepo.Update(c.Context(), contract); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update contract"})
+	}
+
+	return c.JSON(contract)
+}
+
+func (h *Handler) Delete(c *fiber.Ctx) error {
+	code := c.Params("code")
+	if err := h.contractRepo.Delete(c.Context(), code); err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "contract not found"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
 func (h *Handler) Expiring(c *fiber.Ctx) error {
 	daysStr := c.Query("days")
 	if daysStr == "" {

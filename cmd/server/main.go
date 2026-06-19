@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"time"
 
@@ -43,6 +42,11 @@ func main() {
 	categoryRepo := category.NewRepository(database.Pool)
 
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
+	secretPrefix := cfg.JWTSecret
+	if len(secretPrefix) > 8 {
+		secretPrefix = secretPrefix[:8]
+	}
+	logger.Info().Str("jwt_secret_prefix", secretPrefix).Msg("JWT secret loaded")
 	seqService := services.NewSequenceService(database.Pool)
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
@@ -59,12 +63,13 @@ func main() {
 	app := fiber.New()
 
 	// Global middleware
+	app.Use(middleware.RequestIDMiddleware)
 	app.Use(middleware.StructuredLogger(logger))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3000",
+		AllowOrigins:     "*",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 
@@ -72,18 +77,15 @@ func main() {
 	limiter := middleware.NewRateLimiter(100, time.Minute)
 	app.Use(limiter.Middleware)
 
-	// Health check
-	app.Get("/health", func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
-		defer cancel()
-		if err := database.Pool.Ping(ctx); err != nil {
-			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"status": "unhealthy",
-				"error":  "database unreachable",
-			})
-		}
-		return c.JSON(fiber.Map{"status": "healthy"})
-	})
+	// Prometheus metrics middleware
+	app.Use(middleware.MetricsMiddleware)
+
+	// Health checks
+	healthChecker := middleware.NewHealthChecker(logger)
+	healthChecker.RegisterRoutes(app)
+
+	// Prometheus metrics endpoint
+	app.Get("/metrics", middleware.MetricsHandler())
 
 	// Public routes
 	app.Post("/api/v1/login", authHandler.Login)
@@ -138,6 +140,10 @@ func main() {
 	riskReviewGroup.Get("", riskAssessmentHandler.List)
 	riskReviewGroup.Get("/:code", riskAssessmentHandler.Get)
 
+	riskManageGroup := protected.Group("/risk-assessments", middleware.RequirePermission("canReviewRisk"))
+	riskManageGroup.Put("/:code", riskAssessmentHandler.Update)
+	riskManageGroup.Delete("/:code", riskAssessmentHandler.Delete)
+
 	protected.Put("/risk-assessments/:code/approve", riskAssessmentHandler.Approve, middleware.RequirePermission("canApproveRisk"))
 
 	// Compliance
@@ -146,6 +152,7 @@ func main() {
 	compGroup.Get("", compHandler.List)
 	compGroup.Get("/:code", compHandler.Get)
 	compGroup.Put("/:code", compHandler.Update)
+	compGroup.Delete("/:code", compHandler.Delete)
 	protected.Get("/compliance/expiring", compHandler.Expiring)
 
 	// Contracts
@@ -153,6 +160,8 @@ func main() {
 	contractGroup.Post("", contractHandler.Create)
 	contractGroup.Get("", contractHandler.List)
 	contractGroup.Get("/:code", contractHandler.Get)
+	contractGroup.Put("/:code", contractHandler.Update)
+	contractGroup.Delete("/:code", contractHandler.Delete)
 	protected.Get("/contracts/expiring", contractHandler.Expiring)
 
 	// Audit

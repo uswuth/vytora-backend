@@ -145,6 +145,14 @@ func (h *Handler) List(c *fiber.Ctx) error {
 	return c.JSON(records)
 }
 
+func (h *Handler) Delete(c *fiber.Ctx) error {
+	code := c.Params("code")
+	if err := h.compRepo.Delete(c.Context(), code); err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "compliance record not found"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
 func (h *Handler) Expiring(c *fiber.Ctx) error {
 	daysStr := c.Query("days")
 	if daysStr == "" {

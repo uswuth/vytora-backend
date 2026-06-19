@@ -1,0 +1,1153 @@
+{
+	"info": {
+		"name": "VRMP API - Full Workflow Test",
+		"description": "Complete Postman collection for VRMP backend.\n\n## How to Use\n1. Import into Postman (File → Import)\n2. Set `base_url` variable (default: `http://localhost:8080`)\n3. Run **1. Auth → Login** first — token auto-saves\n4. Run folders **in order** — each folder builds on the previous one\n5. Each request has `Authorization: Bearer {{token}}` set explicitly\n\n## Prerequisites\n- `go run cmd/server/main.go`\n- `go run cmd/seed/main.go` (creates: admin@vrmp.com / admin123)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "vendor_code",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "risk_code",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "compliance_code",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "contract_code",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "category_code",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "0. Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "1. Auth",
+			"item": [
+				{
+					"name": "Login - System Admin",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear old variables to avoid stale/conflicting data",
+									"pm.collectionVariables.unset(\"token\");",
+									"pm.collectionVariables.unset(\"user_id\");",
+									"pm.collectionVariables.unset(\"vendor_code\");",
+									"pm.collectionVariables.unset(\"risk_code\");",
+									"pm.collectionVariables.unset(\"compliance_code\");",
+									"pm.collectionVariables.unset(\"contract_code\");",
+									"pm.collectionVariables.unset(\"category_code\");"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful - status 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test(\"Token received\", function () {",
+									"    pm.expect(jsonData.token).to.not.be.empty;",
+									"});",
+									"",
+									"pm.collectionVariables.set(\"token\", jsonData.token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@vrmp.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "login"]
+						}
+					}
+				},
+				{
+					"name": "Get Current User (Me)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Get current user successful - status 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.email).to.eql(\"admin@vrmp.com\");",
+									"    pm.collectionVariables.set(\"user_id\", jsonData.user_id);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "me"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Users (Admin Only)",
+			"item": [
+				{
+					"name": "Create Risk Manager User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"risk.manager@vrmp.com\",\n  \"password\": \"password123\",\n  \"full_name\": \"Risk Manager\",\n  \"role\": \"risk_manager\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users"]
+						}
+					}
+				},
+				{
+					"name": "Create Compliance Officer User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"compliance@vrmp.com\",\n  \"password\": \"password123\",\n  \"full_name\": \"Compliance Officer\",\n  \"role\": \"compliance_officer\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users"]
+						}
+					}
+				},
+				{
+					"name": "Create Department Manager User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"dept.manager@vrmp.com\",\n  \"password\": \"password123\",\n  \"full_name\": \"Department Manager\",\n  \"role\": \"department_manager\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users"]
+						}
+					}
+				},
+				{
+					"name": "List All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users"]
+						}
+					}
+				},
+				{
+					"name": "Get User By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users", "{{user_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update User Role",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role\": \"risk_manager\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}/role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users", "{{user_id}}", "role"]
+						}
+					}
+				},
+				{
+					"name": "Deactivate User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}/deactivate",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users", "{{user_id}}", "deactivate"]
+						}
+					}
+				},
+				{
+					"name": "Activate User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}/activate",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "users", "{{user_id}}", "activate"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Categories",
+			"item": [
+				{
+					"name": "Create Category - Technology",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Category created - status 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"category_code\", jsonData.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"technology\",\n  \"display_name\": \"Technology\",\n  \"description\": \"Technology and software vendors\",\n  \"status\": \"Active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"]
+						}
+					}
+				},
+				{
+					"name": "Create Category - Consulting",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"consulting\",\n  \"display_name\": \"Consulting\",\n  \"description\": \"Management and IT consulting\",\n  \"status\": \"Active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"]
+						}
+					}
+				},
+				{
+					"name": "List Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories"]
+						}
+					}
+				},
+				{
+					"name": "Get Category by Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories/{{category_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories", "{{category_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"display_name\": \"Technology Vendors\",\n  \"description\": \"Updated description\",\n  \"status\": \"Active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories/{{category_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories", "{{category_code}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Vendors",
+			"item": [
+				{
+					"name": "Create Vendor - Acme Corp",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Vendor created - status 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"vendor_code\", jsonData.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Acme Corporation\",\n  \"category\": \"technology\",\n  \"contact_person\": \"John Doe\",\n  \"contact_email\": \"john@acme.com\",\n  \"country\": \"USA\",\n  \"risk_level\": \"Medium\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors"]
+						}
+					}
+				},
+				{
+					"name": "List Vendors",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors"]
+						}
+					}
+				},
+				{
+					"name": "Get Vendor By Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Vendor",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Acme Corporation Updated\",\n  \"category\": \"technology\",\n  \"contact_person\": \"John Doe Jr\",\n  \"contact_email\": \"john.jr@acme.com\",\n  \"country\": \"USA\",\n  \"risk_level\": \"High\",\n  \"status\": \"Draft\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Vendor Workflow",
+			"item": [
+				{
+					"name": "Submit Vendor (Draft → Submitted)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}/submit",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}", "submit"]
+						}
+					}
+				},
+				{
+					"name": "Review Risk (Submitted → RiskReview)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}/review-risk",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}", "review-risk"]
+						}
+					}
+				},
+				{
+					"name": "Review Compliance (RiskReview → ComplianceReview)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}/review-compliance",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}", "review-compliance"]
+						}
+					}
+				},
+				{
+					"name": "Approve Vendor (ComplianceReview → Approved)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}", "approve"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Risk Assessments",
+			"item": [
+				{
+					"name": "Create Risk Assessment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Risk assessment created - status 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"risk_code\", jsonData.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"vendor_code\": \"{{vendor_code}}\",\n  \"assessment_date\": \"2026-06-14\",\n  \"overall_risk_score\": 65,\n  \"risk_level\": \"Medium\",\n  \"security_risk_score\": 70,\n  \"financial_risk_score\": 60,\n  \"operational_risk_score\": 50,\n  \"legal_risk_score\": 80,\n  \"notes\": \"Initial risk assessment review\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/risk-assessments",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "risk-assessments"]
+						}
+					}
+				},
+				{
+					"name": "List Risk Assessments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/risk-assessments",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "risk-assessments"],
+							"query": [
+								{
+									"key": "vendor_code",
+									"value": "{{vendor_code}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Risk Assessment by Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/risk-assessments/{{risk_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "risk-assessments", "{{risk_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Risk Assessment",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"assessment_date\": \"2026-06-15\",\n  \"overall_risk_score\": 45,\n  \"risk_level\": \"Low\",\n  \"security_risk_score\": 40,\n  \"financial_risk_score\": 50,\n  \"operational_risk_score\": 30,\n  \"legal_risk_score\": 60,\n  \"status\": \"Reviewed\",\n  \"notes\": \"Updated after mitigation review\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/risk-assessments/{{risk_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "risk-assessments", "{{risk_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Approve Risk Assessment",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/risk-assessments/{{risk_code}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "risk-assessments", "{{risk_code}}", "approve"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Compliance Records",
+			"item": [
+				{
+					"name": "Create Compliance Record - ISO27001",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Compliance record created - status 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"compliance_code\", jsonData.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"vendor_code\": \"{{vendor_code}}\",\n  \"certification_type\": \"ISO27001\",\n  \"valid_from\": \"2026-01-01\",\n  \"valid_until\": \"2026-12-31\",\n  \"issued_by\": \"BSI Group\",\n  \"evidence_url\": \"https://storage.example.com/certs/iso27001.pdf\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/compliance",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "compliance"]
+						}
+					}
+				},
+				{
+					"name": "List Compliance Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/compliance?vendor_code={{vendor_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "compliance"],
+							"query": [
+								{
+									"key": "vendor_code",
+									"value": "{{vendor_code}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Compliance Record by Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/compliance/{{compliance_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "compliance", "{{compliance_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Compliance Record",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"certification_type\": \"ISO27001\",\n  \"status\": \"Approved\",\n  \"valid_from\": \"2026-01-01\",\n  \"valid_until\": \"2026-12-31\",\n  \"issued_by\": \"BSI Group\",\n  \"evidence_url\": \"https://storage.example.com/certs/iso27001.pdf\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/compliance/{{compliance_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "compliance", "{{compliance_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Expiring Compliance Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/compliance/expiring?days=90",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "compliance", "expiring"],
+							"query": [
+								{
+									"key": "days",
+									"value": "90"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "8. Contracts",
+			"item": [
+				{
+					"name": "Create Contract",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Contract created - status 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"contract_code\", jsonData.code);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"vendor_code\": \"{{vendor_code}}\",\n  \"contract_number\": \"CN-2026-001\",\n  \"start_date\": \"2026-01-01\",\n  \"end_date\": \"2026-12-31\",\n  \"contract_value\": 500000,\n  \"renewal_status\": \"Auto-Renew\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/contracts",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "contracts"]
+						}
+					}
+				},
+				{
+					"name": "List Contracts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/contracts?vendor_code={{vendor_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "contracts"],
+							"query": [
+								{
+									"key": "vendor_code",
+									"value": "{{vendor_code}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Contract by Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/contracts/{{contract_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "contracts", "{{contract_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Contract",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"vendor_code\": \"{{vendor_code}}\",\n  \"contract_number\": \"CN-2026-001-UPDATED\",\n  \"start_date\": \"2026-01-01\",\n  \"end_date\": \"2027-06-30\",\n  \"contract_value\": 750000,\n  \"renewal_status\": \"Manual\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/contracts/{{contract_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "contracts", "{{contract_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Expiring Contracts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/contracts/expiring?days=90",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "contracts", "expiring"],
+							"query": [
+								{
+									"key": "days",
+									"value": "90"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "9. Audit Trail",
+			"item": [
+				{
+					"name": "List Audit Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/audit?table=vendors&record_code={{vendor_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "audit"],
+							"query": [
+								{
+									"key": "table",
+									"value": "vendors"
+								},
+								{
+									"key": "record_code",
+									"value": "{{vendor_code}}"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "10. Reports",
+			"item": [
+				{
+					"name": "Summary Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/summary",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "reports", "summary"]
+						}
+					}
+				},
+				{
+					"name": "Monthly Onboarding Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/monthly-onboarding",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "reports", "monthly-onboarding"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "11. Cleanup (Optional)",
+			"item": [
+				{
+					"name": "Delete Vendor",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/vendors/{{vendor_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "vendors", "{{vendor_code}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Category",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categories/{{category_code}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "categories", "{{category_code}}"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

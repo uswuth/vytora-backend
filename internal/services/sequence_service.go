@@ -16,6 +16,7 @@ var PrefixMap = map[string]string{
 	"compliance_record": "CMP",
 	"contract":          "CTR",
 	"audit_trail":       "AUD",
+	"category":          "CAT",
 }
 
 var DigitsMap = map[string]int{
@@ -26,6 +27,7 @@ var DigitsMap = map[string]int{
 	"compliance_record": 5, // CMP00001–CMP99999
 	"contract":          5, // CTR00001–CTR99999
 	"audit_trail":       6, // AUD000001–AUD999999
+	"category":          3, // CAT001–CAT999
 }
 
 // SequenceService generates entity codes like VEN001.

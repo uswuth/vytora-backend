@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -67,6 +68,34 @@ func (r *Repository) ListByVendor(ctx context.Context, vendorID string) ([]Contr
 		contracts = append(contracts, c)
 	}
 	return contracts, nil
+}
+
+func (r *Repository) Update(ctx context.Context, c *Contract) error {
+	result, err := r.pool.Exec(ctx, `
+		UPDATE contracts
+		SET vendor_id=$1, contract_number=$2, start_date=$3, end_date=$4,
+		    contract_value=$5, renewal_status=$6, updated_at=NOW()
+		WHERE code=$7
+	`, c.VendorID, c.ContractNumber, c.StartDate, c.EndDate,
+		c.ContractValue, c.RenewalStatus, c.Code)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (r *Repository) Delete(ctx context.Context, code string) error {
+	result, err := r.pool.Exec(ctx, `DELETE FROM contracts WHERE code = $1`, code)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 func (r *Repository) Expiring(ctx context.Context, days int) ([]Contract, error) {

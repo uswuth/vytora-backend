@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -80,6 +81,17 @@ func (r *Repository) ListByVendor(ctx context.Context, vendorID string) ([]Compl
 		records = append(records, cr)
 	}
 	return records, nil
+}
+
+func (r *Repository) Delete(ctx context.Context, code string) error {
+	result, err := r.pool.Exec(ctx, `DELETE FROM compliance_records WHERE code = $1`, code)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // Expiring returns certifications expiring within the given number of days.

@@ -43,36 +43,34 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
-func (rl *RateLimiter) Middleware(next fiber.Handler) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		ip := c.IP()
+func (rl *RateLimiter) Middleware(c *fiber.Ctx) error {
+	ip := c.IP()
 
-		rl.mu.Lock()
-		v, exists := rl.visitors[ip]
-		if !exists {
-			v = &visitor{tokens: rl.rate, lastCheck: time.Now()}
-			rl.visitors[ip] = v
-		}
-
-		// Refill tokens
-		now := time.Now()
-		elapsed := now.Sub(v.lastCheck)
-		newTokens := int(elapsed.Seconds() * float64(rl.rate) / rl.interval.Seconds())
-		if newTokens > 0 {
-			v.tokens += newTokens
-			if v.tokens > rl.rate {
-				v.tokens = rl.rate
-			}
-			v.lastCheck = now
-		}
-
-		if v.tokens > 0 {
-			v.tokens--
-			rl.mu.Unlock()
-			return next(c)
-		}
-		rl.mu.Unlock()
-
-		return c.Status(http.StatusTooManyRequests).JSON(fiber.Map{"error": "rate limit exceeded"})
+	rl.mu.Lock()
+	v, exists := rl.visitors[ip]
+	if !exists {
+		v = &visitor{tokens: rl.rate, lastCheck: time.Now()}
+		rl.visitors[ip] = v
 	}
+
+	// Refill tokens
+	now := time.Now()
+	elapsed := now.Sub(v.lastCheck)
+	newTokens := int(elapsed.Seconds() * float64(rl.rate) / rl.interval.Seconds())
+	if newTokens > 0 {
+		v.tokens += newTokens
+		if v.tokens > rl.rate {
+			v.tokens = rl.rate
+		}
+		v.lastCheck = now
+	}
+
+	if v.tokens > 0 {
+		v.tokens--
+		rl.mu.Unlock()
+		return c.Next()
+	}
+	rl.mu.Unlock()
+
+	return c.Status(http.StatusTooManyRequests).JSON(fiber.Map{"error": "rate limit exceeded"})
 }
