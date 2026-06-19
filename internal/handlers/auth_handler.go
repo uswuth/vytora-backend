@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uswuth/vytora-backend/internal/entity/user"
@@ -49,4 +51,25 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		User:  *u,
 	}
 	return c.Status(fiber.StatusOK).JSON(resp)
+}
+
+func (h *AuthHandler) ExtendSession(c *fiber.Ctx) error {
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing authorization header"})
+	}
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid authorization format"})
+	}
+
+	newToken, ttl, err := h.jwtService.ExtendToken(parts[1])
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid or expired token"})
+	}
+
+	return c.JSON(fiber.Map{
+		"token":      newToken,
+		"expires_in": ttl,
+	})
 }

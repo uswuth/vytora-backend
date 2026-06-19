@@ -1,922 +1,756 @@
-VRMP Backend API Documentation v1.0
+# VRMP Backend API Documentation
 
-Base URL: http://localhost:8080
-Content-Type: application/json (for requests with body)
-Authentication: Bearer token (JWT) in Authorization header for protected endpoints.
-1. Authentication
-1.1 Login
+**Base URL:** `http://localhost:8080`  
+**Content-Type:** `application/json`  
+**Auth:** Bearer JWT in `Authorization` header
 
-Endpoint
-POST /api/v1/login
+---
 
-Purpose
-Authenticate a user and receive a JWT token.
+## Table of Contents
+1. [Authentication](#authentication)
+2. [Users](#users)
+3. [Vendors](#vendors)
+4. [Risk Assessments](#risk-assessments)
+5. [Compliance Records](#compliance-records)
+6. [Contracts](#contracts)
+7. [Audit Trail](#audit-trail)
+8. [Reports](#reports)
+9. [Categories](#categories)
+10. [Health & Metrics](#health--metrics)
+11. [TypeScript Types](#typescript-types)
+12. [Error Handling](#error-handling)
+13. [Token Management & Session Extension](#token-management--session-extension)
 
-Authentication
-None (public).
+---
 
-Request Body
-Field	Type	Required	Validation	Description
-email	string	Yes	Valid email	User's email
-password	string	Yes	Min 6 characters	User's password
+## Authentication
 
-Sample Request
-json
+### `POST /api/v1/login`
+Login with email + password. Returns JWT token + user profile.
 
+**Request:**
+```json
 {
-  "email": "admin@vrmp.com",
-  "password": "admin123"
+  "email": "admin@vytora.com",
+  "password": "SecurePass123!"
 }
+```
 
-Success Response (200)
-json
-
+**Response 200:**
+```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "expires_in": 86400,
   "user": {
-    "id": "uuid",
-    "code": "USR001",
-    "email": "admin@vrmp.com",
-    "full_name": "System Administrator",
-    "role": "system_admin",
+    "id": "a1b2c3d4-...",
+    "code": "USR-001",
+    "email": "admin@vytora.com",
+    "full_name": "Admin User",
+    "role": "admin",
     "is_active": true,
-    "created_at": "2026-06-14T03:08:31+05:30",
-    "updated_at": "2026-06-14T03:08:31+05:30"
+    "created_at": "2026-01-15T10:00:00Z",
+    "updated_at": "2026-01-15T10:00:00Z"
   }
 }
+```
 
-Error Responses
+**Errors:**
+- `400` — invalid email format or password < 8 chars
+- `401` — wrong credentials
+- `403` — account deactivated
 
-    400 – Invalid request body
+---
 
-    401 – {"error":"invalid email or password"}
+### `POST /api/v1/auth/extend`
+Extend the current JWT session. Requires valid (not fully expired) token.
 
-    403 – {"error":"account is deactivated"}
+**Headers:** `Authorization: Bearer <token>`
 
-2. User Profile
-2.1 Get Current User
+**Request:** (empty body)
 
-Endpoint
-GET /api/v1/me
-
-Purpose
-Return authenticated user’s details from the JWT.
-
-Authentication
-Required – any valid role.
-
-Headers
-Authorization: Bearer <token>
-
-Response
-json
-
+**Response 200:**
+```json
 {
-  "user_id": "uuid",
-  "code": "USR001",
-  "email": "admin@vrmp.com",
-  "role": "system_admin"
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "expires_in": 86400
 }
+```
 
-Error Responses
+**Errors:**
+- `401` — missing/invalid auth header or token fully expired
 
-    401 – Missing/invalid token
+---
 
-3. Vendors
-3.1 Create Vendor
+## Users
 
-Endpoint
-POST /api/v1/vendors
+### `POST /api/v1/users`
+Create a new user. **Requires:** `canManageUsers`
 
-Purpose
-Add a new vendor (status = Draft).
-
-Authentication
-canCreateVendor (system_admin, risk_manager, department_manager)
-
-Request Body
-Field	Type	Required	Validation	Description
-name	string	Yes	2-255 characters	Vendor name
-category	string	Yes	Max 100 characters	e.g., "Cloud", "Payroll"
-contact_person	string	No	–	Name of contact person
-contact_email	string	No	Valid email (if present)	Contact email
-country	string	No	–	Country
-risk_level	string	Yes	One of: Low, Medium, High, Critical	Initial risk level
-
-Sample Request
-json
-
+**Request:**
+```json
 {
-  "name": "Acme Corp",
-  "category": "Cloud",
-  "contact_person": "John Doe",
-  "contact_email": "john@acme.com",
-  "country": "India",
-  "risk_level": "Low"
+  "email": "newuser@vytora.com",
+  "password": "SecurePass123!",
+  "full_name": "New User",
+  "role": "viewer"
 }
+```
 
-Success Response (201)
-json
-
+**Response 201:**
+```json
 {
-  "id": "uuid",
-  "code": "VEN001",
-  "name": "Acme Corp",
-  "category": "Cloud",
-  "contact_person": "John Doe",
-  "contact_email": "john@acme.com",
-  "country": "India",
-  "contract_start_date": null,
-  "contract_end_date": null,
-  "risk_level": "Low",
-  "status": "Draft",
-  "assigned_dept_manager_id": null,
-  "created_by": "uuid",
-  "created_at": "2026-06-17T22:11:53+05:30",
-  "updated_at": "2026-06-17T22:11:53+05:30"
-}
-
-Error Responses
-
-    400 – Validation error
-
-    401 – Token missing/invalid
-
-    403 – No permission
-
-    500 – Server error
-
-3.2 List Vendors
-
-Endpoint
-GET /api/v1/vendors
-
-Purpose
-Search and paginate vendors with filters.
-
-Authentication
-canEditVendor (system_admin, risk_manager, department_manager)
-
-Query Parameters
-Parameter	Type	Required	Description
-search	string	No	Search in name or code (case‑insensitive)
-category	string	No	Exact match
-risk_level	string	No	Exact match (Low/Medium/High/Critical)
-status	string	No	Exact match (Draft/Submitted/…)
-country	string	No	Exact match
-limit	integer	No	Rows per page (default 20)
-offset	integer	No	Offset for pagination
-sort_by	string	No	Column name (e.g., created_at)
-sort_order	string	No	ASC or DESC (default DESC)
-
-Sample Request
-GET /api/v1/vendors?search=Acme&risk_level=Low&limit=10
-
-Response (200)
-json
-
-{
-  "data": [
-    {
-      "id": "uuid",
-      "code": "VEN001",
-      "name": "Acme Corp",
-      "category": "Cloud",
-      "contact_person": "John Doe",
-      "contact_email": "john@acme.com",
-      "country": "India",
-      "contract_start_date": null,
-      "contract_end_date": null,
-      "risk_level": "Low",
-      "status": "Draft",
-      "assigned_dept_manager_id": null,
-      "created_by": "uuid",
-      "created_at": "...",
-      "updated_at": "..."
-    }
-  ],
-  "total": 1
-}
-
-Error Responses
-
-    401, 403
-
-3.3 Get Vendor by Code
-
-Endpoint
-GET /api/v1/vendors/{code}
-
-Purpose
-Retrieve a single vendor by its human‑readable code (e.g., VEN001).
-
-Authentication
-canEditVendor
-
-Response (200)
-Same vendor object as above.
-
-Error Responses
-
-    404 – {"error":"vendor not found"}
-
-3.4 Update Vendor
-
-Endpoint
-PUT /api/v1/vendors/{code}
-
-Purpose
-Modify vendor details.
-
-Authentication
-canEditVendor
-
-Request Body
-Same fields as create, plus status (required) – can only change to valid workflow states.
-Field	Type	Required	Validation
-status	string	Yes	One of: Draft, Submitted, RiskReview, ComplianceReview, Approved, Rejected, Active, Inactive
-
-Sample Request
-json
-
-{
-  "name": "Acme Corp Updated",
-  "category": "Finance",
-  "contact_person": "Jane Doe",
-  "contact_email": "jane@acme.com",
-  "country": "India",
-  "risk_level": "Medium",
-  "status": "Draft"
-}
-
-Response (200)
-Updated vendor object.
-
-Error Responses
-
-    400 – Validation
-
-    404 – Vendor not found
-
-    403
-
-3.5 Delete Vendor
-
-Endpoint
-DELETE /api/v1/vendors/{code}
-
-Purpose
-Remove a vendor permanently.
-
-Authentication
-canDeleteVendor
-
-Response
-204 No Content
-
-Error Responses
-
-    404
-
-4. Vendor Workflow Transitions
-
-These endpoints advance the vendor’s status.
-4.1 Submit (Draft → Submitted)
-
-Endpoint
-PUT /api/v1/vendors/{code}/submit
-
-Authentication
-canSubmitVendorRequest
-
-Response
-204 No Content
-
-Errors
-400 – Not in Draft status
-404
-4.2 Risk Review (Submitted → RiskReview)
-
-Endpoint
-PUT /api/v1/vendors/{code}/review-risk
-
-Authentication
-canReviewRisk
-4.3 Compliance Review (RiskReview → ComplianceReview)
-
-Endpoint
-PUT /api/v1/vendors/{code}/review-compliance
-
-Authentication
-canReviewCompliance
-4.4 Approve (ComplianceReview → Approved)
-
-Endpoint
-PUT /api/v1/vendors/{code}/approve
-
-Authentication
-canEditVendor (admin role typically)
-4.5 Reject (Any → Rejected)
-
-Endpoint
-PUT /api/v1/vendors/{code}/reject
-
-Authentication
-canEditVendor
-
-Errors for all transitions
-400 – Invalid current status
-404 – Not found
-403 – No permission
-5. Risk Assessments
-5.1 Create Risk Assessment
-
-Endpoint
-POST /api/v1/risk-assessments
-
-Purpose
-Submit a new risk assessment; overall risk score and level are auto‑calculated.
-
-Authentication
-canCreateRiskAssessment
-
-Request Body
-Field	Type	Required	Validation
-vendor_code	string	Yes	Existing vendor code
-security_risk_score	float	Yes	0‑100
-financial_risk_score	float	Yes	0‑100
-operational_risk_score	float	Yes	0‑100
-legal_risk_score	float	Yes	0‑100
-assessment_date	string	Yes	Format: YYYY-MM-DD
-notes	string	No	Free text
-
-Sample Request
-json
-
-{
-  "vendor_code": "VEN001",
-  "security_risk_score": 30,
-  "financial_risk_score": 40,
-  "operational_risk_score": 20,
-  "legal_risk_score": 10,
-  "assessment_date": "2026-06-17",
-  "notes": "Initial review"
-}
-
-Response (201)
-json
-
-{
-  "id": "uuid",
-  "code": "RAK00001",
-  "vendor_id": "uuid",
-  "vendor_code": "VEN001",
-  "assessment_date": "2026-06-17T00:00:00Z",
-  "assessor_id": "uuid",
-  "assessor_code": "USR001",
-  "overall_risk_score": 25.0,
-  "risk_level": "Low",
-  "security_risk_score": 30,
-  "financial_risk_score": 40,
-  "operational_risk_score": 20,
-  "legal_risk_score": 10,
-  "status": "Draft",
-  "notes": "Initial review",
+  "id": "...",
+  "code": "USR-002",
+  "email": "newuser@vytora.com",
+  "full_name": "New User",
+  "role": "viewer",
+  "is_active": true,
   "created_at": "...",
   "updated_at": "..."
 }
+```
 
-*(overall_score = average of four scores, risk_level mapping: ≤25 Low, 26‑50 Medium, 51‑75 High, ≥76 Critical)*
+### `GET /api/v1/users`
+List all users. **Requires:** `canManageUsers`
 
-Errors
-400 – Invalid date, vendor not found
-403 – No permission
-500
-5.2 List Risk Assessments
-
-Endpoint
-GET /api/v1/risk-assessments
-
-Authentication
-canReviewRisk
-
-Query Parameters
-Parameter	Type	Description
-vendor_code	string	Filter by vendor code
-risk_level	string	Low/Medium/High/Critical
-status	string	Draft/Reviewed/Approved
-date_from	string	YYYY-MM-DD
-date_to	string	YYYY-MM-DD
-limit/offset	int	Pagination
-
-Response (200)
-json
-
-{
-  "data": [ /* array of risk assessment objects with vendor_code and assessor_code */ ],
-  "total": 5
-}
-
-5.3 Get Risk Assessment
-
-Endpoint
-GET /api/v1/risk-assessments/{code}
-
-Authentication
-canReviewRisk
-
-Response (200)
-Single risk assessment object (with vendor_code and assessor_code).
-5.4 Approve Risk Assessment
-
-Endpoint
-PUT /api/v1/risk-assessments/{code}/approve
-
-Authentication
-canApproveRisk
-
-Response
-204 No Content
-
-Errors
-400 – Only Draft/Reviewed can be approved
-6. Compliance Records
-6.1 Create Compliance Record
-
-Endpoint
-POST /api/v1/compliance
-
-Authentication
-canReviewCompliance
-
-Request Body
-Field	Type	Required	Validation
-vendor_code	string	Yes	Existing vendor
-certification_type	string	Yes	ISO27001, SOC2, GDPR, PCI_DSS
-valid_from	string	Yes	YYYY-MM-DD
-valid_until	string	Yes	YYYY-MM-DD
-issued_by	string	No	Issuing authority
-evidence_url	string	No	URL to evidence file
-
-Sample Request
-json
-
-{
-  "vendor_code": "VEN001",
-  "certification_type": "ISO27001",
-  "valid_from": "2026-01-01",
-  "valid_until": "2026-12-31",
-  "issued_by": "Certifier Inc",
-  "evidence_url": "https://files.example.com/iso.pdf"
-}
-
-Response (201)
-json
-
-{
-  "id": "uuid",
-  "code": "CMP00001",
-  "vendor_id": "uuid",
-  "vendor_code": "VEN001",
-  "certification_type": "ISO27001",
-  "status": "Approved",         // auto‑computed: Approved/Expired/Pending
-  "valid_from": "2026-01-01T00:00:00Z",
-  "valid_until": "2026-12-31T00:00:00Z",
-  "issued_by": "Certifier Inc",
-  "evidence_url": "https://files.example.com/iso.pdf",
-  "reviewed_by": "uuid",
-  "created_at": "...",
-  "updated_at": "..."
-}
-
-Status: Approved if today between valid_from and valid_until, Expired if after valid_until, else Pending.
-
-Errors
-409 – Duplicate certification type for this vendor (unique vendor+certification+status)
-404 – Vendor not found
-400 – Validation
-6.2 List Compliance Records
-
-Endpoint
-GET /api/v1/compliance?vendor_code=VEN001
-
-Authentication
-canReviewCompliance
-
-Response (200)
-json
-
+**Response 200:**
+```json
 [
-  { /* compliance record objects with vendor_code */ }
+  {
+    "id": "...",
+    "code": "USR-001",
+    "email": "admin@vytora.com",
+    "full_name": "Admin User",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "...",
+    "updated_at": "..."
+  }
 ]
+```
+*(password_hash never returned)*
 
-6.3 Get Compliance Record
+### `GET /api/v1/users/:id`
+Get single user. **Requires:** `canManageUsers`
 
-Endpoint
-GET /api/v1/compliance/{code}
+### `PUT /api/v1/users/:id/role`
+Update user role. **Requires:** `canManageUsers`
 
-Authentication
-canReviewCompliance
+**Request:**
+```json
+{ "role": "editor" }
+```
 
-Response
-Single compliance record.
-6.4 Update Compliance Record
+### `PUT /api/v1/users/:id/deactivate`
+Deactivate user. **Requires:** `canManageUsers`
 
-Endpoint
-PUT /api/v1/compliance/{code}
+### `PUT /api/v1/users/:id/activate`
+Activate user. **Requires:** `canManageUsers`
 
-Authentication
-canReviewCompliance
+---
 
-Request Body
-Same fields as create, but all optional; only provided fields are updated. Can also update status manually if needed.
-6.5 Expiring Certifications
+## Vendors
 
-Endpoint
-GET /api/v1/compliance/expiring?days=90
+### `POST /api/v1/vendors`
+Create vendor. **Requires:** `canCreateVendor`
 
-Authentication
-Any authenticated user.
-
-Response (200)
-Array of compliance records that expire within the given number of days (status=Approved and valid_until ≤ today+days).
-7. Contracts
-7.1 Create Contract
-
-Endpoint
-POST /api/v1/contracts
-
-Authentication
-canEditVendor
-
-Request Body
-Field	Type	Required	Validation
-vendor_code	string	Yes	Existing vendor
-contract_number	string	Yes	Max 100 characters
-start_date	string	Yes	YYYY-MM-DD
-end_date	string	Yes	YYYY-MM-DD
-contract_value	float	No	Monetary value
-renewal_status	string	Yes	Auto-Renew, Manual, Expiring
-
-Sample Request
-json
-
+**Request:**
+```json
 {
-  "vendor_code": "VEN001",
-  "contract_number": "CT-001",
+  "name": "Acme Corp",
+  "category": "Technology",
+  "contact_person": "John Doe",
+  "contact_email": "john@acme.com",
+  "country": "USA",
+  "contract_start_date": "2026-01-01",
+  "contract_end_date": "2027-12-31",
+  "risk_level": "Medium",
+  "status": "Pending",
+  "assigned_dept_manager_id": "manager-uuid-here"
+}
+```
+*(Dates: `YYYY-MM-DD`. IDs: null or omit if not assigned.)*
+
+**Response 201:** Full Vendor object.
+
+### `GET /api/v1/vendors`
+List vendors (editable view). **Requires:** `canEditVendor`
+
+**Query params:** none required  
+**Response 200:** `Vendor[]`
+
+### `GET /api/v1/vendors/:code`
+Get vendor by code. **Requires:** `canEditVendor`
+
+### `PUT /api/v1/vendors/:code`
+Update vendor. **Requires:** `canEditVendor`
+
+**Request:** Same shape as Create (all fields required).
+
+### `DELETE /api/v1/vendors/:code`
+Delete vendor. **Requires:** `canDeleteVendor`
+
+### `PUT /api/v1/vendors/:code/submit`
+Submit vendor for review. **Requires:** `canSubmitVendorRequest`
+
+### `PUT /api/v1/vendors/:code/review-risk`
+Review vendor risk. **Requires:** `canReviewRisk`
+
+### `PUT /api/v1/vendors/:code/review-compliance`
+Review vendor compliance. **Requires:** `canReviewCompliance`
+
+### `PUT /api/v1/vendors/:code/approve`
+Approve vendor. **Requires:** `canEditVendor`
+
+### `PUT /api/v1/vendors/:code/reject`
+Reject vendor. **Requires:** `canEditVendor`
+
+---
+
+## Risk Assessments
+
+### `POST /api/v1/risk-assessments`
+Create risk assessment. **Requires:** `canCreateRiskAssessment`
+
+**Request:**
+```json
+{
+  "vendor_code": "VEN-001",
+  "assessment_date": "2026-06-01",
+  "overall_risk_score": 65.5,
+  "risk_level": "High",
+  "security_risk_score": 80.0,
+  "financial_risk_score": 50.0,
+  "operational_risk_score": 60.0,
+  "legal_risk_score": 45.0,
+  "status": "Draft",
+  "notes": "Key findings..."
+}
+```
+*(Scores 0–100. Status: `Draft` | `Reviewed` | `Approved`)*
+
+**Response 201:** Full RiskAssessment object.
+
+### `GET /api/v1/risk-assessments`
+List risk assessments. **Requires:** `canReviewRisk`
+
+**Query params:** `vendor_code`, `risk_level`, `status`, `limit`, `offset`
+
+**Response 200:**
+```json
+{
+  "data": [ /* RiskAssessment[] */ ],
+  "total": 42
+}
+```
+
+### `GET /api/v1/risk-assessments/:code`
+Get by code. **Requires:** `canReviewRisk`
+
+### `PUT /api/v1/risk-assessments/:code`
+Update. **Requires:** `canReviewRisk`
+
+**Request:** Same as Create (all fields required).
+
+### `DELETE /api/v1/risk-assessments/:code`
+Delete. **Requires:** `canReviewRisk`
+
+### `PUT /api/v1/risk-assessments/:code/approve`
+Approve. **Requires:** `canApproveRisk`
+
+---
+
+## Compliance Records
+
+### `POST /api/v1/compliance`
+Create compliance record. **Requires:** `canReviewCompliance`
+
+**Request:**
+```json
+{
+  "vendor_code": "VEN-001",
+  "certification_type": "ISO 27001",
+  "valid_from": "2026-01-01",
+  "valid_until": "2027-01-01",
+  "issued_by": "BSI Group",
+  "evidence_url": "https://..."
+}
+```
+*(Dates: `YYYY-MM-DD`. Status auto-calculated from dates.)*
+
+**Response 201:** Full ComplianceRecord object.
+
+### `GET /api/v1/compliance`
+List by vendor. **Requires:** `canReviewCompliance`
+
+**Query param:** `vendor_code` (required)
+
+### `GET /api/v1/compliance/:code`
+Get by code. **Requires:** `canReviewCompliance`
+
+### `PUT /api/v1/compliance/:code`
+Update. **Requires:** `canReviewCompliance`
+
+**Request:**
+```json
+{
+  "certification_type": "SOC 2",
+  "status": "Approved",
+  "valid_from": "2026-02-01",
+  "valid_until": "2027-02-01",
+  "issued_by": "Deloitte",
+  "evidence_url": "https://..."
+}
+```
+*(All fields required. Partial update not supported yet.)*
+
+### `DELETE /api/v1/compliance/:code`
+Delete. **Requires:** `canReviewCompliance`
+
+### `GET /api/v1/compliance/expiring`
+Get expiring certifications (default 30 days). **Requires:** auth
+
+**Query param:** `days` (optional, default `30`)
+
+---
+
+## Contracts
+
+### `POST /api/v1/contracts`
+Create contract. **Requires:** `canEditVendor`
+
+**Request:**
+```json
+{
+  "vendor_code": "VEN-001",
+  "contract_number": "CTR-2026-001",
   "start_date": "2026-01-01",
   "end_date": "2027-01-01",
-  "contract_value": 500000,
-  "renewal_status": "Manual"
+  "contract_value": 150000.00,
+  "renewal_status": "Active"
 }
+```
+*(Dates: `YYYY-MM-DD`. `contract_value`: number or null.)*
 
-Response (201)
-json
+**Response 201:** Full Contract object.
 
-{
-  "id": "uuid",
-  "code": "CTR00001",
-  "vendor_id": "uuid",
-  "vendor_code": "VEN001",
-  "contract_number": "CT-001",
-  "start_date": "2026-01-01T00:00:00Z",
-  "end_date": "2027-01-01T00:00:00Z",
-  "contract_value": 500000,
-  "renewal_status": "Manual",
-  "created_at": "...",
-  "updated_at": "..."
-}
+### `GET /api/v1/contracts`
+List by vendor. **Requires:** `canEditVendor`
 
-7.2 List Contracts
+**Query param:** `vendor_code` (required)
 
-Endpoint
-GET /api/v1/contracts?vendor_code=VEN001
+### `GET /api/v1/contracts/:code`
+Get by code. **Requires:** `canEditVendor`
 
-Authentication
-canEditVendor
-7.3 Get Contract
+### `PUT /api/v1/contracts/:code`
+Update. **Requires:** `canEditVendor`
 
-Endpoint
-GET /api/v1/contracts/{code}
+**Request:** Same as Create (all fields required).
 
-Authentication
-canEditVendor
-7.4 Expiring Contracts
+### `DELETE /api/v1/contracts/:code`
+Delete. **Requires:** `canEditVendor`
 
-Endpoint
-GET /api/v1/contracts/expiring?days=90
+### `GET /api/v1/contracts/expiring`
+Get expiring contracts (default 30 days). **Requires:** auth
 
-Authentication
-Any authenticated user.
-8. Audit Trail
-8.1 List Audit Entries
+**Query param:** `days` (optional, default `30`)
 
-Endpoint
-GET /api/v1/audit
+---
 
-Purpose
-Query immutable record of all changes.
+## Audit Trail
 
-Authentication
-canViewAuditHistory (system_admin, auditor)
+### `GET /api/v1/audit`
+List audit trail entries. **Requires:** `canViewAuditHistory`
 
-Query Parameters
-Parameter	Type	Description
-table	string	vendors, risk_assessments, compliance_records, contracts
-record_code	string	Entity code (e.g., VEN001)
-action	string	CREATE, UPDATE, DELETE
-changed_by	string	User code (e.g., USR001)
-date_from	string	YYYY-MM-DD
-date_to	string	YYYY-MM-DD
-limit/offset	int	Pagination
-
-Response (200)
-json
-
-{
-  "data": [
-    {
-      "id": "uuid",
-      "code": "AUD000001",
-      "table_name": "vendors",
-      "record_id": "uuid",
-      "record_code": "VEN001",
-      "action": "UPDATE",
-      "field_name": "status",
-      "old_value": "Draft",
-      "new_value": "Submitted",
-      "changed_by": "uuid",
-      "changed_at": "2026-06-17T22:11:53+05:30"
-    }
-  ],
-  "total": 1
-}
-
-9. Reports / Dashboard
-9.1 Summary
-
-Endpoint
-GET /api/v1/reports/summary
-
-Authentication
-canAccessAllReports (admin, risk manager, compliance officer) or canViewAssignedVendors (department manager – sees only their vendors)
-
-Response (200)
-json
-
-{
-  "total_vendors": 10,
-  "vendors_by_status": {
-    "Draft": 4,
-    "Submitted": 2,
-    "Approved": 4
-  },
-  "vendors_by_risk_level": {
-    "Low": 5,
-    "Medium": 3,
-    "High": 2
-  },
-  "expiring_contracts_30_days": 1,
-  "expiring_contracts_60_days": 2,
-  "expiring_contracts_90_days": 3,
-  "expiring_compliance_30_days": 0,
-  "expiring_compliance_60_days": 1,
-  "expiring_compliance_90_days": 2,
-  "pending_risk_assessments": 2,
-  "approved_risk_assessments": 5
-}
-
-9.2 Monthly Onboarding Trend
-
-Endpoint
-GET /api/v1/reports/monthly-onboarding
-
-Authentication
-Same as summary.
-
-Response (200)
-json
-
-[
-  { "month": "2026-05", "count": 3 },
-  { "month": "2026-06", "count": 7 }
-]
-
-10. Health Check
-
-Endpoint
-GET /health
-
-Purpose
-Check if the server and database are alive.
-
-Response
-
-    200 – {"status":"healthy"}
-
-    503 – {"status":"unhealthy","error":"database unreachable"}
-
-General Notes
-
-    All timestamps are in ISO 8601 format with timezone (e.g., 2026-06-17T22:11:53+05:30).
-
-    All IDs are UUID v4 strings.
-
-    Entity codes are human‑readable: VEN001, RAK00001, AUD000001, etc.
-
-    Error responses follow the format {"error": "message"}.
-
-    Rate limit: 100 requests/minute per IP. Returns 429 Too Many Requests if exceeded.
-
-    For bulk operations, frontend should respect pagination parameters (limit/offset).
-
-This document gives your frontend team everything they need to start building immediately. If any endpoint requires further clarification, let me know!
-User Management API
-
-Base URL: http://localhost:8080/api/v1/users
-Authentication: All endpoints require a valid JWT from a user with the canManageUsers permission (by default only system_admin).
-1. Create User
-
-Endpoint
-POST /api/v1/users
-
-Purpose
-Create a new user account with a specific role.
-
-Request Body
-Field	Type	Required	Validation
-email	string	Yes	Valid email
-password	string	Yes	Minimum 6 characters
-full_name	string	Yes	2‑255 characters
-role	string	Yes	One of: system_admin, risk_manager, compliance_officer, department_manager, auditor
-
-Sample Request
-json
-
-{
-  "email": "jane@vrmp.com",
-  "password": "secure123",
-  "full_name": "Jane Smith",
-  "role": "risk_manager"
-}
-
-Success Response (201)
-json
-
-{
-  "id": "uuid",
-  "code": "USR002",
-  "email": "jane@vrmp.com",
-  "full_name": "Jane Smith",
-  "role": "risk_manager",
-  "is_active": true,
-  "created_at": "2026-06-17T22:33:45+05:30",
-  "updated_at": "2026-06-17T22:33:45+05:30"
-}
-
-Note: password_hash is never returned.
-
-Error Responses
-
-    400 – Validation error (invalid email, role, etc.)
-
-    401 – Missing or invalid token
-
-    403 – User doesn’t have canManageUsers
-
-    500 – Server error
-
-2. List All Users
-
-Endpoint
-GET /api/v1/users
-
-Purpose
-Retrieve a list of all user accounts (passwords hidden).
-
-Success Response (200)
-json
-
+**Response 200:**
+```json
 [
   {
-    "id": "uuid",
-    "code": "USR001",
-    "email": "admin@vrmp.com",
-    "full_name": "System Administrator",
-    "role": "system_admin",
-    "is_active": true,
-    "created_at": "2026-06-14T03:08:31+05:30",
-    "updated_at": "2026-06-14T03:08:31+05:30"
-  },
-  {
-    "id": "uuid",
-    "code": "USR002",
-    "email": "jane@vrmp.com",
-    "full_name": "Jane Smith",
-    "role": "risk_manager",
-    "is_active": true,
-    "created_at": "2026-06-17T22:33:45+05:30",
-    "updated_at": "2026-06-17T22:33:45+05:30"
+    "id": "...",
+    "entity_type": "vendor",
+    "entity_code": "VEN-001",
+    "action": "update",
+    "performed_by": "USR-001",
+    "performed_at": "2026-06-19T20:00:00Z",
+    "details": { "field": "status", "old": "Pending", "new": "Approved" }
   }
 ]
+```
 
-Error Responses
+---
 
-    401, 403
+## Reports
 
-3. Get User by ID
+### `GET /api/v1/reports/summary`
+Dashboard summary. **Requires:** `canAccessAllReports`
 
-Endpoint
-GET /api/v1/users/{id}
-
-Purpose
-Fetch a single user’s details by their UUID.
-
-Example
-GET /api/v1/users/550e8400-e29b-41d4-a716-446655440000
-
-Success Response (200)
-Same user object as above.
-
-Error Responses
-
-    404 – {"error":"user not found"}
-
-4. Change User Role
-
-Endpoint
-PUT /api/v1/users/{id}/role
-
-Purpose
-Update the role assigned to a user.
-
-Request Body
-Field	Type	Required	Validation
-role	string	Yes	One of: system_admin, risk_manager, compliance_officer, department_manager, auditor
-
-Sample Request
-json
-
+**Response 200:**
+```json
 {
-  "role": "compliance_officer"
+  "total_vendors": 120,
+  "active_vendors": 85,
+  "pending_approvals": 12,
+  "high_risk_count": 15,
+  "expiring_contracts_30d": 8,
+  "expiring_compliance_30d": 5
+}
+```
+
+### `GET /api/v1/reports/monthly-onboarding`
+Monthly vendor onboarding stats. **Requires:** `canAccessAllReports`
+
+**Response 200:**
+```json
+{
+  "months": ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"],
+  "onboarded": [5, 8, 3, 10, 6, 4],
+  "approved": [4, 7, 3, 9, 5, 3]
+}
+```
+
+### `GET /api/v1/reports/summary-2`
+Same as summary but scoped to assigned vendors. **Requires:** `canViewAssignedVendors`
+
+### `GET /api/v1/reports/monthly-onboarding-2`
+Same as monthly-onboarding but scoped. **Requires:** `canViewAssignedVendors`
+
+> Routes ending in `-2` filter results to vendors assigned to the current user's department.
+
+---
+
+## Categories
+
+### `POST /api/v1/categories`
+Create category. **Requires:** `canManageCategories`
+
+**Request:**
+```json
+{
+  "name": "technology",
+  "display_name": "Technology",
+  "description": "IT and software vendors",
+  "status": "Active"
+}
+```
+*(`name` must be unique, lowercase, no spaces.)*
+
+**Response 201:** Full Category object.
+
+### `GET /api/v1/categories`
+List categories. **Requires:** `canViewCategories`
+
+**Query params:** `search`, `status`
+
+**Response 200:**
+```json
+{
+  "data": [ /* Category[] */ ],
+  "total": 25
+}
+```
+
+### `GET /api/v1/categories/:code`
+Get by code. **Requires:** `canViewCategories`
+
+### `PUT /api/v1/categories/:code`
+Update. **Requires:** `canManageCategories`
+
+**Request:**
+```json
+{
+  "display_name": "Technology & Software",
+  "description": "Updated description",
+  "status": "Active"
+}
+```
+
+### `DELETE /api/v1/categories/:code`
+Delete. **Requires:** `canManageCategories`
+
+---
+
+## Health & Metrics
+
+### `GET /healthz`
+Liveness probe. Returns `200 OK` if server is running.
+
+**Response:** `{ "status": "healthy" }`
+
+### `GET /readyz`
+Readiness probe. Checks database connection.
+
+**Response:** `{ "status": "ready", "database": "connected" }`
+
+> Both endpoints are IP-allowlisted (only `127.0.0.1` by default). Configure `HEALTH_ALLOWED_IPS` in `.env` for remote access.
+
+### `GET /metrics`
+Prometheus metrics exposition format.
+
+**Response:** Text/plain prometheus metrics.
+
+---
+
+## TypeScript Types
+
+```typescript
+// --- Core Auth ---
+interface LoginRequest {
+  email: string;
+  password: string;
 }
 
-Success Response
-204 No Content
+interface LoginResponse {
+  token: string;
+  expires_in: number; // seconds until expiry
+  user: User;
+}
 
-Error Responses
+interface ExtendSessionResponse {
+  token: string;
+  expires_in: number;
+}
 
-    400 – Invalid role
+// --- User ---
+interface User {
+  id: string;
+  code: string;
+  email: string;
+  full_name: string;
+  role: 'admin' | 'editor' | 'viewer';
+  is_active: boolean;
+  created_at: string; // ISO 8601
+  updated_at: string; // ISO 8601
+}
 
-    404 – User not found
+// --- Vendor ---
+interface Vendor {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  contact_person?: string;
+  contact_email?: string;
+  country?: string;
+  contract_start_date?: string; // YYYY-MM-DD or null
+  contract_end_date?: string;   // YYYY-MM-DD or null
+  risk_level: string;
+  status: string;
+  assigned_dept_manager_id?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
 
-    403
+// --- Risk Assessment ---
+interface RiskAssessment {
+  id: string;
+  code: string;
+  vendor_id: string;
+  vendor_code?: string;
+  assessment_date: string; // ISO 8601
+  assessor_id?: string;
+  overall_risk_score: number; // 0-100
+  risk_level: 'Low' | 'Medium' | 'High' | 'Critical';
+  security_risk_score: number;
+  financial_risk_score: number;
+  operational_risk_score: number;
+  legal_risk_score: number;
+  status: 'Draft' | 'Reviewed' | 'Approved';
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
 
-5. Deactivate User
+interface CreateRiskAssessmentRequest {
+  vendor_code: string;
+  assessment_date: string; // YYYY-MM-DD
+  overall_risk_score: number;
+  risk_level: string;
+  security_risk_score: number;
+  financial_risk_score: number;
+  operational_risk_score: number;
+  legal_risk_score: number;
+  status: string;
+  notes?: string;
+}
 
-Endpoint
-PUT /api/v1/users/{id}/deactivate
+// --- Compliance Record ---
+interface ComplianceRecord {
+  id: string;
+  code: string;
+  vendor_id: string;
+  vendor_code?: string;
+  certification_type: string;
+  status: string;
+  valid_from?: string; // YYYY-MM-DD or null
+  valid_until?: string; // YYYY-MM-DD or null
+  issued_by: string;
+  evidence_url: string;
+  reviewed_by?: string;
+  created_at: string;
+  updated_at: string;
+}
 
-Purpose
-Soft‑disable a user account (sets is_active = false). Deactivated users cannot log in.
+interface CreateComplianceRequest {
+  vendor_code: string;
+  certification_type: string;
+  valid_from: string; // YYYY-MM-DD
+  valid_until: string; // YYYY-MM-DD
+  issued_by: string;
+  evidence_url: string;
+}
 
-Success Response
-204 No Content
+// --- Contract ---
+interface Contract {
+  id: string;
+  code: string;
+  vendor_id: string;
+  vendor_code?: string;
+  contract_number: string;
+  start_date: string; // ISO 8601
+  end_date: string;   // ISO 8601
+  contract_value?: number; // nullable
+  renewal_status: string;
+  created_at: string;
+  updated_at: string;
+}
 
-Error Responses
+interface CreateContractRequest {
+  vendor_code: string;
+  contract_number: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
+  contract_value?: number;
+  renewal_status: string;
+}
 
-    404, 403
+// --- Category ---
+interface Category {
+  id: string;
+  code: string;
+  name: string;
+  display_name: string;
+  description: string;
+  status: string;
+  created_by: string;
+  created_at: string;
+  updated_at?: string;
+}
 
-6. Activate User
+interface CreateCategoryRequest {
+  name: string;
+  display_name: string;
+  description: string;
+  status: string;
+}
 
-Endpoint
-PUT /api/v1/users/{id}/activate
+// --- Audit ---
+interface AuditEntry {
+  id: string;
+  entity_type: string;
+  entity_code: string;
+  action: string;
+  performed_by: string;
+  performed_at: string;
+  details: Record<string, any>;
+}
 
-Purpose
-Re‑enable a previously deactivated account (sets is_active = true).
+// --- Reports ---
+interface ReportSummary {
+  total_vendors: number;
+  active_vendors: number;
+  pending_approvals: number;
+  high_risk_count: number;
+  expiring_contracts_30d: number;
+  expiring_compliance_30d: number;
+}
 
-Success Response
-204 No Content
+interface MonthlyOnboardingReport {
+  months: string[];
+  onboarded: number[];
+  approved: number[];
+}
+```
 
-Error Responses
+---
 
-    404, 403
+## Error Handling
 
-Notes for Frontend
+All errors follow this shape:
 
-    User IDs are UUIDs – use the id field from the list response, not code, for user management endpoints.
+```json
+{
+  "error": "short description",
+  "details": "optional longer message"
+}
+```
 
-    The user’s human‑readable code (e.g., USR002) is returned and can be shown in the UI, but is not used for identification in these endpoints.
+**Common status codes:**
+| Code | Meaning |
+|------|---------|
+| `200` | Success |
+| `201` | Created |
+| `400` | Bad request (validation / parse error) |
+| `401` | Unauthorized (missing/invalid/expired token) |
+| `403` | Forbidden (valid token but insufficient permissions) |
+| `404` | Not found |
+| `409` | Conflict (e.g., duplicate category name) |
+| `429` | Rate limited (100 req/min per IP) |
+| `500` | Server error |
 
-    Roles are case‑sensitive – always use lowercase with underscores (system_admin, risk_manager, etc.).
+---
 
-    Only an admin (or a role with canManageUsers) can access these endpoints.
+## Token Management & Session Extension
 
-Method	URL	Permission	Description
-POST	/api/v1/categories	canManageCategories	Create category
-GET	/api/v1/categories	canViewCategories	List/search categories
-GET	/api/v1/categories/{code}	canViewCategories	Get by code
-PUT	/api/v1/categories/{code}	canManageCategories	Update
-DELETE	/api/v1/categories/{code}	canManageCategories	Delete
+### Overview
+- JWT tokens expire after `JWT_EXPIRY_HOURS` (default: 24h) from `.env`
+- Frontend should track `expires_in` returned from login/extend
+- When countdown reaches near 0, call `/api/v1/auth/extend` to get a fresh token
 
-Now all entities that have a category field (vendors, and potentially others later) can validate against this central list.
+### Frontend Countdown Flow
+```
+1. Login → store token + expires_in + timestamp
+2. Every second: remaining = expires_in - (now - loginTimestamp)
+3. If remaining < 60s: show "Extend Session" button
+4. Click button → POST /api/v1/auth/extend with current token
+   → swap stored token + reset timer
+5. If extend fails (401) or token fully expires → redirect to login
+```
+
+### Extend Session Call (frontend example)
+```typescript
+async function extendSession() {
+  const res = await fetch('/api/v1/auth/extend', {
+    headers: {
+      'Authorization': `Bearer ${currentToken}`,
+    },
+  });
+  if (!res.ok) {
+    // Token expired — redirect to login
+    logout();
+    return;
+  }
+  const data: ExtendSessionResponse = await res.json();
+  saveToken(data.token, data.expires_in);
+}
+```
+
+### Important Notes
+- The `Authorization` header must be `Bearer <token>` (case-insensitive `bearer`)
+- `expires_in` from extend is the **new total seconds**, not the remaining from old token
+- Tokens are **stateless** — no server-side session storage
+- If user is deactivated after login, next request will fail with `403`
+- Rate limit: 100 requests/minute per IP (includes auth endpoints)
+
+---
+
+## Base Response Wrapper
+All list endpoints that support pagination return:
+```json
+{
+  "data": [...],
+  "total": 42
+}
+```
+
+Non-paginated list endpoints (like `/api/v1/audit`, `/api/v1/vendors`) return raw arrays.

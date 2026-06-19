@@ -1,150 +1,367 @@
 # API Endpoints
 
-## 1. Health
+Base URL: `http://localhost:8080`  
+Auth: `Authorization: Bearer <token>`  
+Content-Type: `application/json`
 
-<table class="endpoint-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-  <thead>
-    <tr style="background-color: #f0f0f0; font-weight: bold;">
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Method & Path</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Purpose</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Auth</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Request</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Response (Success)</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Errors</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="background-color: #fafafa;">
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><code>GET /health</code></td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">Check API health and database connectivity</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">Public</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">None</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><code>200</code> - <code>{"status":"healthy"}</code></td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><span style="background-color: #fff3cd;">503</span> – database unreachable</td>
-    </tr>
-  </tbody>
-</table>
+---
 
-## 2. Authentication
+## Auth
 
-<table class="endpoint-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-  <thead>
-    <tr style="background-color: #f0f0f0; font-weight: bold;">
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Method & Path</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Purpose</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Auth</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Request</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Response (Success)</th>
-      <th style="padding: 8px 10px; border: 1px solid #ddd;">Errors</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr style="background-color: #fafafa;">
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><code>POST /api/v1/login</code></td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">Authenticate and receive JWT</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">Public</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">
-        <ul style="margin: 0; padding-left: 20px;">
-          <li><code>email</code> string ✅</li>
-          <li><code>password</code> string ✅</li>
-        </ul>
-      </td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><code>200</code> - <code>{"token": string, "user": User}</code></td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">
-        <span style="background-color: #f8d7da;">400</span> – validation failed<br>
-        <span style="background-color: #f8d7da;">401</span> – invalid credentials<br>
-        <span style="background-color: #f8d7da;">403</span> – account deactivated
-      </td>
-    </tr>
-    <tr style="background-color: #fff;">
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><code>GET /api/v1/me</code></td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">Get current authenticated user</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">Authenticated</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;">None</td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><code>200</code> - <code>{"user_id": string, "code": string, "email": string, "role": string}</code></td>
-      <td style="padding: 8px 10px; border: 1px solid #ddd;"><span style="background-color: #f8d7da;">401</span> – missing/invalid token</td>
-    </tr>
-  </tbody>
-</table>
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/login | Public | — |
+| POST | /api/v1/auth/extend | Bearer | — |
 
-## 3. Users
+### POST /api/v1/login
+**Request**
+```json
+{ "email": "string", "password": "string" }
+```
+**Response 200**
+```json
+{ "token": "string", "expires_in": 86400, "user": { "id": "uuid", "code": "string", "email": "string", "full_name": "string", "role": "string", "is_active": true, "created_at": "ISO8601", "updated_at": "ISO8601" } }
+```
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>POST /api/v1/users</code> | Create a new user | <code>canManageUsers</code> | <ul style="margin:0;padding-left:20px;"><li><code>email</code> string ✅</li><li><code>password</code> string ✅</li><li><code>full_name</code> string ✅</li><li><code>role</code> string ✅ (system_admin / risk_manager / compliance_officer / department_manager / auditor)</li></ul> | <code>201</code> - User object (without password_hash) | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">409</span> – email exists<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/users</code> | List all users | <code>canManageUsers</code> | None | <code>200</code> - Array of User objects | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/users/{id}</code> | Get user by ID | <code>canManageUsers</code> | None | <code>200</code> - User object | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized |
-| <code>PUT /api/v1/users/{id}/role</code> | Update user role | <code>canManageUsers</code> | <ul style="margin:0;padding-left:20px;"><li><code>role</code> string ✅</li></ul> | <code>204 No Content</code> | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>PUT /api/v1/users/{id}/deactivate</code> | Deactivate user | <code>canManageUsers</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>PUT /api/v1/users/{id}/activate</code> | Activate user | <code>canManageUsers</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
+### POST /api/v1/auth/extend
+**Headers:** `Authorization: Bearer <token>`  
+**Request:** empty body  
+**Response 200**
+```json
+{ "token": "string", "expires_in": 86400 }
+```
 
-## 4. Categories
+---
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>POST /api/v1/categories</code> | Create category | <code>canManageCategories</code> | <ul style="margin:0;padding-left:20px;"><li><code>name</code> string ✅</li><li><code>display_name</code> string ✅</li><li><code>description</code> string ❌</li><li><code>status</code> string ✅ (Draft/Active/Inactive)</li></ul> | <code>201</code> - Category object | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">409</span> – duplicate name<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/categories</code> | List categories | <code>canViewCategories</code> | <ul style="margin:0;padding-left:20px;"><li><code>?search</code> string ❌</li><li><code>?status</code> string ❌</li><li><code>?limit</code> int ❌</li><li><code>?offset</code> int ❌</li></ul> | <code>200</code> - <code>{"data": Category[], "total": int}</code> | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/categories/{code}</code> | Get category by code | <code>canViewCategories</code> | None | <code>200</code> - Category object | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized |
-| <code>PUT /api/v1/categories/{code}</code> | Update category | <code>canManageCategories</code> | <ul style="margin:0;padding-left:20px;"><li><code>display_name</code> string ✅</li><li><code>description</code> string ❌</li><li><code>status</code> string ✅ (Draft/Active/Inactive)</li></ul> | <code>200</code> - Category object | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>DELETE /api/v1/categories/{code}</code> | Delete category | <code>canManageCategories</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
+## Users
 
-## 5. Vendors
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/users | Bearer | canManageUsers |
+| GET | /api/v1/users | Bearer | canManageUsers |
+| GET | /api/v1/users/:id | Bearer | canManageUsers |
+| PUT | /api/v1/users/:id/role | Bearer | canManageUsers |
+| PUT | /api/v1/users/:id/deactivate | Bearer | canManageUsers |
+| PUT | /api/v1/users/:id/activate | Bearer | canManageUsers |
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>POST /api/v1/vendors</code> | Create vendor | <code>canCreateVendor</code> | <ul style="margin:0;padding-left:20px;"><li><code>name</code> string ✅</li><li><code>category</code> string ✅</li><li><code>contact_person</code> string ❌</li><li><code>contact_email</code> string ❌</li><li><code>country</code> string ❌</li><li><code>risk_level</code> string ✅ (Low/Medium/High/Critical)</li></ul> | <code>201</code> - Vendor object | <span style="background-color:#f8d7da;">400</span> – validation failed / category invalid<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/vendors</code> | List vendors | <code>canEditVendor</code> | <ul style="margin:0;padding-left:20px;"><li><code>?search</code> string ❌</li><li><code>?category</code> string ❌</li><li><code>?risk_level</code> string ❌</li><li><code>?status</code> string ❌</li><li><code>?country</code> string ❌</li><li><code>?sort_by</code> string ❌</li><li><code>?sort_order</code> string ❌</li><li><code>?limit</code> int ❌</li><li><code>?offset</code> int ❌</li></ul> | <code>200</code> - <code>{"data": Vendor[], "total": int}</code> | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/vendors/{code}</code> | Get vendor by code | <code>canEditVendor</code> | None | <code>200</code> - Vendor object | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized |
-| <code>PUT /api/v1/vendors/{code}</code> | Update vendor | <code>canEditVendor</code> | <ul style="margin:0;padding-left:20px;"><li><code>name</code> string ✅</li><li><code>category</code> string ✅</li><li><code>contact_person</code> string ❌</li><li><code>contact_email</code> string ❌</li><li><code>country</code> string ❌</li><li><code>risk_level</code> string ✅ (Low/Medium/High/Critical)</li><li><code>status</code> string ✅ (Draft/Submitted/RiskReview/ComplianceReview/Approved/Rejected/Active/Inactive)</li></ul> | <code>200</code> - Vendor object | <span style="background-color:#f8d7da;">400</span> – validation failed / category invalid<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>DELETE /api/v1/vendors/{code}</code> | Delete vendor | <code>canDeleteVendor</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
+### POST /api/v1/users
+**Request**
+```json
+{ "email": "string", "password": "string", "full_name": "string", "role": "admin|editor|viewer" }
+```
+**Response 201** — User object (no `password_hash`)
 
-### Workflow Transitions
+### GET /api/v1/users
+**Response 200** — User[]
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>PUT /api/v1/vendors/{code}/submit</code> | Submit vendor for review (Draft → Submitted) | <code>canSubmitVendorRequest</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">400</span> – must be Draft<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>PUT /api/v1/vendors/{code}/review-risk</code> | Move to risk review (Submitted → RiskReview) | <code>canReviewRisk</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">400</span> – must be Submitted<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>PUT /api/v1/vendors/{code}/review-compliance</code> | Move to compliance review (RiskReview → ComplianceReview) | <code>canReviewCompliance</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">400</span> – must be RiskReview<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>PUT /api/v1/vendors/{code}/approve</code> | Approve vendor (ComplianceReview → Approved) | <code>canEditVendor</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">400</span> – must be ComplianceReview<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>PUT /api/v1/vendors/{code}/reject</code> | Reject vendor (any → Rejected) | <code>canEditVendor</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">400</span> – already terminal state<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
+### GET /api/v1/users/:id
+**Response 200** — User
 
-## 6. Risk Assessments
+### PUT /api/v1/users/:id/role
+**Request**
+```json
+{ "role": "string" }
+```
+**Response 204**
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>POST /api/v1/risk-assessments</code> | Create risk assessment | <code>canCreateRiskAssessment</code> | <ul style="margin:0;padding-left:20px;"><li><code>vendor_code</code> string ✅</li><li><code>assessment_date</code> string ✅ (YYYY-MM-DD)</li><li><code>risk_level</code> string ✅ (Low/Medium/High/Critical)</li><li><code>findings</code> string ✅</li><li><code>recommendations</code> string ❌</li></ul> | <code>201</code> - RiskAssessment object | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">404</span> – vendor not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/risk-assessments</code> | List risk assessments | <code>canReviewRisk</code> | <ul style="margin:0;padding-left:20px;"><li><code>?vendor_code</code> string ❌</li><li><code>?risk_level</code> string ❌</li><li><code>?status</code> string ❌</li><li><code>?limit</code> int ❌</li><li><code>?offset</code> int ❌</li></ul> | <code>200</code> - <code>{"data": RiskAssessment[], "total": int}</code> | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/risk-assessments/{code}</code> | Get risk assessment by code | <code>canReviewRisk</code> | None | <code>200</code> - RiskAssessment object | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized |
-| <code>PUT /api/v1/risk-assessments/{code}/approve</code> | Approve risk assessment | <code>canApproveRisk</code> | None | <code>204 No Content</code> | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
+### PUT /api/v1/users/:id/deactivate
+**Response 204**
 
-## 7. Compliance Records
+### PUT /api/v1/users/:id/activate
+**Response 204**
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>POST /api/v1/compliance</code> | Create compliance record | <code>canReviewCompliance</code> | <ul style="margin:0;padding-left:20px;"><li><code>vendor_code</code> string ✅</li><li><code>certification_type</code> string ✅ (ISO27001/SOC2/GDPR/PCI_DSS)</li><li><code>valid_from</code> string ✅ (YYYY-MM-DD)</li><li><code>valid_until</code> string ✅ (YYYY-MM-DD)</li><li><code>issued_by</code> string ❌</li><li><code>evidence_url</code> string ❌</li></ul> | <code>201</code> - ComplianceRecord object | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">404</span> – vendor not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/compliance</code> | List compliance records by vendor | <code>canReviewCompliance</code> | <ul style="margin:0;padding-left:20px;"><li><code>?vendor_code</code> string ✅</li></ul> | <code>200</code> - Array of ComplianceRecord objects | <span style="background-color:#f8d7da;">404</span> – vendor not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/compliance/{code}</code> | Get compliance record by code | <code>canReviewCompliance</code> | None | <code>200</code> - ComplianceRecord object | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized |
-| <code>PUT /api/v1/compliance/{code}</code> | Update compliance record | <code>canReviewCompliance</code> | <ul style="margin:0;padding-left:20px;"><li><code>certification_type</code> string ✅</li><li><code>status</code> string ✅ (Pending/Approved/Expired)</li><li><code>valid_from</code> string ❌ (YYYY-MM-DD)</li><li><code>valid_until</code> string ❌ (YYYY-MM-DD)</li><li><code>issued_by</code> string ❌</li><li><code>evidence_url</code> string ❌</li></ul> | <code>200</code> - ComplianceRecord object | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/compliance/expiring</code> | Get expiring certifications | <code>canReviewCompliance</code> | <ul style="margin:0;padding-left:20px;"><li><code>?days</code> int ❌ (default: 30)</li></ul> | <code>200</code> - Array of ComplianceRecord objects | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
+---
 
-## 8. Contracts
+## Vendors
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>POST /api/v1/contracts</code> | Create contract | <code>canEditVendor</code> | <ul style="margin:0;padding-left:20px;"><li><code>vendor_code</code> string ✅</li><li><code>contract_number</code> string ✅</li><li><code>start_date</code> string ✅ (YYYY-MM-DD)</li><li><code>end_date</code> string ✅ (YYYY-MM-DD)</li><li><code>contract_value</code> float64 ❌</li><li><code>renewal_status</code> string ✅ (Auto-Renew/Manual/Expiring)</li></ul> | <code>201</code> - Contract object | <span style="background-color:#f8d7da;">400</span> – validation failed<br><span style="background-color:#f8d7da;">404</span> – vendor not found<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/contracts</code> | List contracts by vendor | <code>canEditVendor</code> | <ul style="margin:0;padding-left:20px;"><li><code>?vendor_code</code> string ✅</li></ul> | <code>200</code> - Array of Contract objects | <span style="background-color:#f8d7da;">404</span> – vendor not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/contracts/{code}</code> | Get contract by code | <code>canEditVendor</code> | None | <code>200</code> - Contract object | <span style="background-color:#f8d7da;">404</span> – not found<br><span style="background-color:#f8d7da;">401</span> – unauthorized |
-| <code>GET /api/v1/contracts/expiring</code> | Get expiring contracts | <code>canEditVendor</code> | <ul style="margin:0;padding-left:20px;"><li><code>?days</code> int ❌ (default: 30)</li></ul> | <code>200</code> - Array of Contract objects | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/vendors | Bearer | canCreateVendor |
+| GET | /api/v1/vendors | Bearer | canEditVendor |
+| GET | /api/v1/vendors/:code | Bearer | canEditVendor |
+| PUT | /api/v1/vendors/:code | Bearer | canEditVendor |
+| DELETE | /api/v1/vendors/:code | Bearer | canDeleteVendor |
+| PUT | /api/v1/vendors/:code/submit | Bearer | canSubmitVendorRequest |
+| PUT | /api/v1/vendors/:code/review-risk | Bearer | canReviewRisk |
+| PUT | /api/v1/vendors/:code/review-compliance | Bearer | canReviewCompliance |
+| PUT | /api/v1/vendors/:code/approve | Bearer | canEditVendor |
+| PUT | /api/v1/vendors/:code/reject | Bearer | canEditVendor |
 
-## 9. Audit Trail
+### POST /api/v1/vendors
+**Request**
+```json
+{ "name": "string", "category": "string", "contact_person": "string?", "contact_email": "string?", "country": "string?", "contract_start_date": "YYYY-MM-DD?", "contract_end_date": "YYYY-MM-DD?", "risk_level": "Low|Medium|High|Critical", "status": "string", "assigned_dept_manager_id": "uuid?" }
+```
+**Response 201** — Vendor object
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>GET /api/v1/audit</code> | List audit trail entries | <code>canViewAuditHistory</code> | <ul style="margin:0;padding-left:20px;"><li><code>?table</code> string ❌</li><li><code>?record_code</code> string ❌</li><li><code>?action</code> string ❌ (CREATE/UPDATE/DELETE)</li><li><code>?changed_by</code> string ❌</li><li><code>?date_from</code> string ❌ (YYYY-MM-DD)</li><li><code>?date_to</code> string ❌ (YYYY-MM-DD)</li><li><code>?limit</code> int ❌</li><li><code>?offset</code> int ❌</li></ul> | <code>200</code> - <code>{"data": AuditTrail[], "total": int}</code> | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
+### GET /api/v1/vendors
+**Response 200** — Vendor[]
 
-## 10. Reports
+### GET /api/v1/vendors/:code
+**Response 200** — Vendor
 
-| Method & Path | Purpose | Auth | Request | Response (Success) | Errors |
-|---|---|---|---|---|---|
-| <code>GET /api/v1/reports/summary</code> | Get vendor summary dashboard | <code>canAccessAllReports</code> or <code>canViewAssignedVendors</code> | None | <code>200</code> - SummaryResponse object with:<br><ul style="margin:0;padding-left:20px;"><li><code>total_vendors</code> int</li><li><code>vendors_by_status</code> map</li><li><code>vendors_by_risk_level</code> map</li><li><code>expiring_contracts_30_days</code> int</li><li><code>expiring_contracts_60_days</code> int</li><li><code>expiring_contracts_90_days</code> int</li><li><code>expiring_compliance_30_days</code> int</li><li><code>expiring_compliance_60_days</code> int</li><li><code>expiring_compliance_90_days</code> int</li><li><code>pending_risk_assessments</code> int</li><li><code>approved_risk_assessments</code> int</li></ul> | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
-| <code>GET /api/v1/reports/monthly-onboarding</code> | Get monthly onboarding stats | <code>canAccessAllReports</code> or <code>canViewAssignedVendors</code> | None | <code>200</code> - Array of MonthlyOnboardingItem objects, each with:<br><ul style="margin:0;padding-left:20px;"><li><code>month</code> string (YYYY-MM)</li><li><code>count</code> int</li></ul> | <span style="background-color:#f8d7da;">401</span> – unauthorized<br><span style="background-color:#fff3cd;">500</span> – server error |
+### PUT /api/v1/vendors/:code
+**Request** — same as Create (all fields required)  
+**Response 200** — Vendor
+
+### DELETE /api/v1/vendors/:code
+**Response 204**
+
+### Workflow endpoints (PUT /api/v1/vendors/:code/*)
+**Request:** empty body  
+**Response 204**
+
+---
+
+## Risk Assessments
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/risk-assessments | Bearer | canCreateRiskAssessment |
+| GET | /api/v1/risk-assessments | Bearer | canReviewRisk |
+| GET | /api/v1/risk-assessments/:code | Bearer | canReviewRisk |
+| PUT | /api/v1/risk-assessments/:code | Bearer | canReviewRisk |
+| DELETE | /api/v1/risk-assessments/:code | Bearer | canReviewRisk |
+| PUT | /api/v1/risk-assessments/:code/approve | Bearer | canApproveRisk |
+
+### POST /api/v1/risk-assessments
+**Request**
+```json
+{ "vendor_code": "string", "assessment_date": "YYYY-MM-DD", "overall_risk_score": 0-100, "risk_level": "Low|Medium|High|Critical", "security_risk_score": 0-100, "financial_risk_score": 0-100, "operational_risk_score": 0-100, "legal_risk_score": 0-100, "status": "Draft|Reviewed|Approved", "notes": "string?" }
+```
+**Response 201** — RiskAssessment object
+
+### GET /api/v1/risk-assessments
+**Query params:** `vendor_code?`, `risk_level?`, `status?`, `limit?`, `offset?`  
+**Response 200**
+```json
+{ "data": [RiskAssessment], "total": 42 }
+```
+
+### GET /api/v1/risk-assessments/:code
+**Response 200** — RiskAssessment
+
+### PUT /api/v1/risk-assessments/:code
+**Request** — same as Create  
+**Response 200** — RiskAssessment
+
+### DELETE /api/v1/risk-assessments/:code
+**Response 204**
+
+### PUT /api/v1/risk-assessments/:code/approve
+**Response 204**
+
+---
+
+## Compliance Records
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/compliance | Bearer | canReviewCompliance |
+| GET | /api/v1/compliance | Bearer | canReviewCompliance |
+| GET | /api/v1/compliance/:code | Bearer | canReviewCompliance |
+| PUT | /api/v1/compliance/:code | Bearer | canReviewCompliance |
+| DELETE | /api/v1/compliance/:code | Bearer | canReviewCompliance |
+| GET | /api/v1/compliance/expiring | Bearer | — |
+
+### POST /api/v1/compliance
+**Request**
+```json
+{ "vendor_code": "string", "certification_type": "string", "valid_from": "YYYY-MM-DD", "valid_until": "YYYY-MM-DD", "issued_by": "string", "evidence_url": "string" }
+```
+**Response 201** — ComplianceRecord object
+
+### GET /api/v1/compliance
+**Query param:** `vendor_code` (required)  
+**Response 200** — ComplianceRecord[]
+
+### GET /api/v1/compliance/:code
+**Response 200** — ComplianceRecord
+
+### PUT /api/v1/compliance/:code
+**Request**
+```json
+{ "certification_type": "string", "status": "string", "valid_from": "YYYY-MM-DD", "valid_until": "YYYY-MM-DD", "issued_by": "string", "evidence_url": "string" }
+```
+**Response 200** — ComplianceRecord
+
+### DELETE /api/v1/compliance/:code
+**Response 204**
+
+### GET /api/v1/compliance/expiring
+**Query param:** `days?` (default 30)  
+**Response 200** — ComplianceRecord[]
+
+---
+
+## Contracts
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/contracts | Bearer | canEditVendor |
+| GET | /api/v1/contracts | Bearer | canEditVendor |
+| GET | /api/v1/contracts/:code | Bearer | canEditVendor |
+| PUT | /api/v1/contracts/:code | Bearer | canEditVendor |
+| DELETE | /api/v1/contracts/:code | Bearer | canEditVendor |
+| GET | /api/v1/contracts/expiring | Bearer | — |
+
+### POST /api/v1/contracts
+**Request**
+```json
+{ "vendor_code": "string", "contract_number": "string", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "contract_value": 1000.00?, "renewal_status": "string" }
+```
+**Response 201** — Contract object
+
+### GET /api/v1/contracts
+**Query param:** `vendor_code`  
+**Response 200** — Contract[]
+
+### GET /api/v1/contracts/:code
+**Response 200** — Contract
+
+### PUT /api/v1/contracts/:code
+**Request** — same as Create  
+**Response 200** — Contract
+
+### DELETE /api/v1/contracts/:code
+**Response 204**
+
+### GET /api/v1/contracts/expiring
+**Query param:** `days?` (default 30)  
+**Response 200** — Contract[]
+
+---
+
+## Audit
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | /api/v1/audit | Bearer | canViewAuditHistory |
+
+### GET /api/v1/audit
+**Response 200** — AuditEntry[]
+
+---
+
+## Reports
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | /api/v1/reports/summary | Bearer | canAccessAllReports |
+| GET | /api/v1/reports/monthly-onboarding | Bearer | canAccessAllReports |
+| GET | /api/v1/reports/summary-2 | Bearer | canViewAssignedVendors |
+| GET | /api/v1/reports/monthly-onboarding-2 | Bearer | canViewAssignedVendors |
+
+### GET /api/v1/reports/summary
+**Response 200**
+```json
+{ "total_vendors": 120, "active_vendors": 85, "pending_approvals": 12, "high_risk_count": 15, "expiring_contracts_30d": 8, "expiring_compliance_30d": 5 }
+```
+
+### GET /api/v1/reports/monthly-onboarding
+**Response 200**
+```json
+{ "months": ["2026-01", ...], "onboarded": [5, ...], "approved": [4, ...] }
+```
+
+### GET /api/v1/reports/summary-2
+Same as summary, scoped to assigned vendors.
+
+### GET /api/v1/reports/monthly-onboarding-2
+Same as monthly-onboarding, scoped to assigned vendors.
+
+---
+
+## Categories
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | /api/v1/categories | Bearer | canManageCategories |
+| GET | /api/v1/categories | Bearer | canViewCategories |
+| GET | /api/v1/categories/:code | Bearer | canViewCategories |
+| PUT | /api/v1/categories/:code | Bearer | canManageCategories |
+| DELETE | /api/v1/categories/:code | Bearer | canManageCategories |
+
+### POST /api/v1/categories
+**Request**
+```json
+{ "name": "string", "display_name": "string", "description": "string", "status": "Active|Inactive" }
+```
+**Response 201** — Category object
+
+### GET /api/v1/categories
+**Query params:** `search?`, `status?`  
+**Response 200**
+```json
+{ "data": [Category], "total": 25 }
+```
+
+### GET /api/v1/categories/:code
+**Response 200** — Category
+
+### PUT /api/v1/categories/:code
+**Request**
+```json
+{ "display_name": "string", "description": "string", "status": "string" }
+```
+**Response 200** — Category
+
+### DELETE /api/v1/categories/:code
+**Response 204**
+
+---
+
+## Health & Metrics
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | /healthz | Public | IP allowlist |
+| GET | /readyz | Public | IP allowlist |
+| GET | /metrics | Public | IP allowlist |
+
+### GET /healthz
+**Response 200**
+```json
+{ "status": "healthy" }
+```
+
+### GET /readyz
+**Response 200**
+```json
+{ "status": "ready", "database": "connected" }
+```
+
+### GET /metrics
+**Response 200** — Prometheus exposition format (text/plain)
+
+---
+
+## Response Codes
+
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 201 | Created |
+| 204 | No content (delete/update success) |
+| 400 | Validation / parse error |
+| 401 | Missing/invalid/expired token |
+| 403 | Insufficient permissions |
+| 404 | Not found |
+| 409 | Conflict |
+| 429 | Rate limited |
+| 500 | Server error |
+
+## Error Format
+```json
+{ "error": "string", "details": "string?" }
+```
+
+## Paginated Response
+```json
+{ "data": [...], "total": 42 }
+```
+Used by: categories, risk-assessments. All other list endpoints return raw arrays.
+
+## Auth Header
+`Authorization: Bearer <token>`  
+Prefix `Bearer ` is case-insensitive.

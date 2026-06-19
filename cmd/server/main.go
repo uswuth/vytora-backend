@@ -91,6 +91,11 @@ func main() {
 	// Public routes
 	app.Post("/api/v1/login", authHandler.Login)
 
+	// Protected auth routes
+	authGroup := app.Group("/api/v1/auth")
+	authGroup.Use(middleware.AuthMiddleware(jwtService))
+	authGroup.Post("/extend", authHandler.ExtendSession)
+
 	// User management (admin only)
 	userGroup := app.Group("/api/v1/users")
 	userGroup.Use(middleware.AuthMiddleware(jwtService))
