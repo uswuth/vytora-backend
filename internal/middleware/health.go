@@ -10,12 +10,23 @@ import (
 )
 
 type HealthChecker struct {
-	logger    zerolog.Logger
-	startTime time.Time
+	logger     zerolog.Logger
+	startTime  time.Time
+	allowedIPs map[string]bool
 }
 
-func NewHealthChecker(logger zerolog.Logger) *HealthChecker {
-	return &HealthChecker{logger: logger, startTime: time.Now()}
+func NewHealthChecker(logger zerolog.Logger, allowedIPs []string) *HealthChecker {
+	ipMap := make(map[string]bool)
+	for _, ip := range allowedIPs {
+		ipMap[ip] = true
+		ipMap["127.0.0.1"] = true
+		ipMap["::1"] = true
+	}
+	if len(ipMap) == 0 {
+		ipMap["127.0.0.1"] = true
+		ipMap["::1"] = true
+	}
+	return &HealthChecker{logger: logger, startTime: time.Now(), allowedIPs: ipMap}
 }
 
 func (h *HealthChecker) RegisterRoutes(app *fiber.App) {
@@ -24,6 +35,9 @@ func (h *HealthChecker) RegisterRoutes(app *fiber.App) {
 }
 
 func (h *HealthChecker) Healthz(c *fiber.Ctx) error {
+	if !h.isAllowed(c) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+	}
 	return c.JSON(fiber.Map{
 		"status": "ok",
 		"uptime": time.Since(h.startTime).Seconds(),
@@ -31,6 +45,9 @@ func (h *HealthChecker) Healthz(c *fiber.Ctx) error {
 }
 
 func (h *HealthChecker) Readyz(c *fiber.Ctx) error {
+	if !h.isAllowed(c) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+	}
 	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 	defer cancel()
 
@@ -58,6 +75,15 @@ func (h *HealthChecker) Readyz(c *fiber.Ctx) error {
 		"status": status,
 		"checks": checks,
 	})
+}
+
+func (h *HealthChecker) isAllowed(c *fiber.Ctx) bool {
+	ip := c.IP()
+	forwarded := c.Get("X-Forwarded-For")
+	if forwarded != "" {
+		ip = forwarded
+	}
+	return h.allowedIPs[ip]
 }
 
 func (h *HealthChecker) checkDatabase(ctx context.Context) string {

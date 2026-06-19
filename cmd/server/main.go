@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -66,7 +67,7 @@ func main() {
 	app.Use(middleware.RequestIDMiddleware)
 	app.Use(middleware.StructuredLogger(logger))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
+		AllowOrigins:     strings.Join(cfg.AllowedOrigins, ","),
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
 		AllowCredentials: false,
@@ -81,7 +82,7 @@ func main() {
 	app.Use(middleware.MetricsMiddleware)
 
 	// Health checks
-	healthChecker := middleware.NewHealthChecker(logger)
+	healthChecker := middleware.NewHealthChecker(logger, cfg.HealthAllowedIPs)
 	healthChecker.RegisterRoutes(app)
 
 	// Prometheus metrics endpoint
