@@ -190,8 +190,8 @@ func main() {
 	catViewGroup.Get("", categoryHandler.List)
 	catViewGroup.Get("/:code", categoryHandler.Get)
 
-	logger.Info().Msg("VRMP server starting on http://localhost:8080")
-	if err := app.Listen(":8080"); err != nil {
+	logger.Info().Msg("VRMP server starting on 0.0.0.0:8080")
+	if err := app.Listen("0.0.0.0:8080"); err != nil {
 		logger.Fatal().Err(err).Msg("server start failed")
 	}
 }
