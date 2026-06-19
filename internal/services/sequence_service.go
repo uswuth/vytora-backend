@@ -16,6 +16,18 @@ var PrefixMap = map[string]string{
 	"compliance_record": "CMP",
 	"contract":          "CTR",
 	"audit_trail":       "AUD",
+	"category":          "CAT",
+}
+
+var DigitsMap = map[string]int{
+	"user":              3, // USR001–USR999
+	"vendor":            3, // VEN001–VEN999
+	"vendor_contact":    4, // VCN0001–VCN9999
+	"risk_assessment":   5, // RAK00001–RAK99999
+	"compliance_record": 5, // CMP00001–CMP99999
+	"contract":          5, // CTR00001–CTR99999
+	"audit_trail":       6, // AUD000001–AUD999999
+	"category":          3, // CAT001–CAT999
 }
 
 // SequenceService generates entity codes like VEN001.
@@ -35,6 +47,10 @@ func (s *SequenceService) NextCode(ctx context.Context, entityName string) (stri
 	if !ok {
 		return "", fmt.Errorf("unknown entity name: %s", entityName)
 	}
+	digits, ok := DigitsMap[entityName]
+	if !ok {
+		digits = 3 // safe default
+	}
 
 	var nextVal int
 	err := s.pool.QueryRow(ctx, `
@@ -46,7 +62,10 @@ func (s *SequenceService) NextCode(ctx context.Context, entityName string) (stri
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch next sequence: %w", err)
 	}
-
-	code := fmt.Sprintf("%s%03d", prefix, nextVal)
+	
+	code := fmt.Sprintf("%s%0*d", prefix, digits, nextVal)
 	return code, nil
+}
+func formatCode(prefix string, digits int, val int) string {
+	return fmt.Sprintf("%s%0*d", prefix, digits, val)
 }

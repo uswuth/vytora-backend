@@ -5,18 +5,22 @@ var RolePermissions = map[string][]string{
 		"canCreateVendor", "canEditVendor", "canDeleteVendor",
 		"canManageUsers", "canManageRoles", "canAccessAllReports",
 		"canConfigureSystem",
+		"canCreateRiskAssessment", "canReviewRisk", "canApproveRisk",
+		"canReviewCompliance", "canTrackCertifications",
+		"canSubmitVendorRequest", "canViewAssignedVendors",
+		"canViewAuditHistory", "canDownloadReports", "canManageCategories",
 	},
 	"risk_manager": {
 		"canCreateRiskAssessment", "canReviewRisk", "canApproveRisk",
-		"canGenerateReports",
+		"canGenerateReports","canViewCategories",
 	},
 	"compliance_officer": {
-		"canReviewCompliance", "canTrackCertifications", "canVerifyRegulations",
+		"canReviewCompliance", "canTrackCertifications", "canVerifyRegulations","canViewCategories",
 	},
 	"department_manager": {
-		"canSubmitVendorRequest", "canViewAssignedVendors", "canRequestVendorReview",
+		"canSubmitVendorRequest", "canViewAssignedVendors", "canRequestVendorReview","canViewCategories",
 	},
 	"auditor": {
-		"canViewAuditHistory", "canDownloadReports",
+		"canViewAuditHistory", "canDownloadReports", "canAccessAllReports","canViewCategories",
 	},
 }

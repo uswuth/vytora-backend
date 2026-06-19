@@ -1,35 +1,40 @@
 package middleware
 
 import (
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
 // RequirePermission checks if the authenticated user has the specified permission.
-func RequirePermission(permission string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := r.Context().Value(UserContextKey).(*services.Claims)
-			if !ok {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-				return
-			}
+func RequirePermission(permission string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, ok := c.Locals(UserContextKey).(*services.Claims)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
 
-			allowedPermissions, exists := RolePermissions[claims.Role]
-			if !exists {
-				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-				return
-			}
+		allowedPermissions, exists := RolePermissions[claims.Role]
+		if !exists {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "forbidden",
+				"role": claims.Role,
+				"permission_required": permission,
+				"reason": "role not found in permissions map",
+			})
+		}
 
-			for _, p := range allowedPermissions {
-				if p == permission {
-					next.ServeHTTP(w, r)
-					return
-				}
+		for _, p := range allowedPermissions {
+			if p == permission {
+				return c.Next()
 			}
+		}
 
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "forbidden",
+			"role": claims.Role,
+			"your_permissions": allowedPermissions,
+			"permission_required": permission,
+			"reason": "permission not granted to this role",
 		})
 	}
 }

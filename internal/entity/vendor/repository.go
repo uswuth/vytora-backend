@@ -1,4 +1,4 @@
-package repository
+package vendor
 
 import (
 	"context"
@@ -7,19 +7,17 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/uswuth/vytora-backend/internal/models"
 )
 
-type VendorRepository struct {
+type Repository struct {
 	pool *pgxpool.Pool
 }
 
-func NewVendorRepository(pool *pgxpool.Pool) *VendorRepository {
-	return &VendorRepository{pool: pool}
+func NewRepository(pool *pgxpool.Pool) *Repository {
+	return &Repository{pool: pool}
 }
 
-// Create inserts a new vendor and populates ID, CreatedAt, UpdatedAt.
-func (r *VendorRepository) Create(ctx context.Context, vendor *models.Vendor) error {
+func (r *Repository) Create(ctx context.Context, vendor *Vendor) error {
 	return r.pool.QueryRow(ctx, `
 		INSERT INTO vendors (code, name, category, contact_person, contact_email, country,
 			contract_start_date, contract_end_date, risk_level, status, assigned_dept_manager_id, created_by)
@@ -31,9 +29,8 @@ func (r *VendorRepository) Create(ctx context.Context, vendor *models.Vendor) er
 		Scan(&vendor.ID, &vendor.CreatedAt, &vendor.UpdatedAt)
 }
 
-// FindByCode retrieves a vendor by its unique code (e.g., VEN005).
-func (r *VendorRepository) FindByCode(ctx context.Context, code string) (*models.Vendor, error) {
-	vendor := &models.Vendor{}
+func (r *Repository) FindByCode(ctx context.Context, code string) (*Vendor, error) {
+	vendor := &Vendor{}
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, code, name, category, contact_person, contact_email, country,
 			contract_start_date, contract_end_date, risk_level, status, assigned_dept_manager_id,
@@ -53,21 +50,19 @@ func (r *VendorRepository) FindByCode(ctx context.Context, code string) (*models
 	return vendor, nil
 }
 
-// ListParams holds the optional filters, search, and pagination.
 type ListParams struct {
-	Search    string // search in name or code
+	Search    string
 	Category  string
 	RiskLevel string
 	Status    string
 	Country   string
 	Limit     int
 	Offset    int
-	SortBy    string // column to sort by (default: created_at)
-	SortOrder string // ASC or DESC (default: DESC)
+	SortBy    string
+	SortOrder string
 }
 
-// List retrieves vendors with filtering, search, pagination, and sorting.
-func (r *VendorRepository) List(ctx context.Context, params ListParams) ([]models.Vendor, int, error) {
+func (r *Repository) List(ctx context.Context, params ListParams) ([]Vendor, int, error) {
 	whereClauses := []string{}
 	args := []interface{}{}
 	argIdx := 1
@@ -104,7 +99,6 @@ func (r *VendorRepository) List(ctx context.Context, params ListParams) ([]model
 		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	// Count total matching records
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM vendors %s", whereSQL)
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
@@ -112,7 +106,6 @@ func (r *VendorRepository) List(ctx context.Context, params ListParams) ([]model
 		return nil, 0, err
 	}
 
-	// Sorting
 	sortBy := "created_at"
 	if params.SortBy != "" {
 		sortBy = params.SortBy
@@ -122,7 +115,6 @@ func (r *VendorRepository) List(ctx context.Context, params ListParams) ([]model
 		sortOrder = "ASC"
 	}
 
-	// Pagination
 	limit := 20
 	if params.Limit > 0 {
 		limit = params.Limit
@@ -150,9 +142,9 @@ func (r *VendorRepository) List(ctx context.Context, params ListParams) ([]model
 	}
 	defer rows.Close()
 
-	var vendors []models.Vendor
+	var vendors []Vendor
 	for rows.Next() {
-		var v models.Vendor
+		var v Vendor
 		if err := rows.Scan(
 			&v.ID, &v.Code, &v.Name, &v.Category,
 			&v.ContactPerson, &v.ContactEmail, &v.Country,
@@ -167,8 +159,7 @@ func (r *VendorRepository) List(ctx context.Context, params ListParams) ([]model
 	return vendors, total, nil
 }
 
-// Update modifies an existing vendor. Returns error if not found.
-func (r *VendorRepository) Update(ctx context.Context, vendor *models.Vendor) error {
+func (r *Repository) Update(ctx context.Context, vendor *Vendor) error {
 	result, err := r.pool.Exec(ctx, `
 		UPDATE vendors
 		SET name=$1, category=$2, contact_person=$3, contact_email=$4, country=$5,
@@ -187,8 +178,24 @@ func (r *VendorRepository) Update(ctx context.Context, vendor *models.Vendor) er
 	return nil
 }
 
-// Delete removes a vendor by code.
-func (r *VendorRepository) Delete(ctx context.Context, code string) error {
+func (r *Repository) UpdateStatus(ctx context.Context, code, status string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE vendors SET status=$1, updated_at=NOW() WHERE code=$2`, status, code)
+	return err
+}
+
+func (r *Repository) Delete(ctx context.Context, code string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM vendors WHERE code = $1`, code)
 	return err
+}
+
+func (r *Repository) IsActive(ctx context.Context, name string) (bool, error) {
+	var status string
+	err := r.pool.QueryRow(ctx, `SELECT status FROM vendors WHERE LOWER(name) = LOWER($1)`, name).Scan(&status)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return status == "Active", nil
 }

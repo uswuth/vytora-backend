@@ -43,5 +43,27 @@ func main() {
 		log.Fatalf("Failed to update user sequence: %v", err)
 	}
 
-	fmt.Println("Seed data inserted: admin user (USR001) created.")
+	// Ensure category sequence exists (for fresh DBs or missed migrations)
+	_, err = pool.Exec(context.Background(), `
+		INSERT INTO entity_sequences (entity_name, next_value) VALUES ('category', 1) ON CONFLICT DO NOTHING;
+	`)
+	if err != nil {
+		log.Fatalf("Failed to seed category sequence: %v", err)
+	}
+
+	// Force-correct admin role if user already exists with wrong role
+	res, err := pool.Exec(context.Background(), `
+		UPDATE users SET role = 'system_admin', is_active = true WHERE email = 'admin@vrmp.com';
+	`)
+	if err != nil {
+		log.Fatalf("Failed to correct admin role: %v", err)
+	}
+	rowsAffected := res.RowsAffected()
+	if rowsAffected > 0 {
+		fmt.Printf("✅ Corrected admin user role to 'system_admin' (%d row(s) updated)\n", rowsAffected)
+	} else {
+		fmt.Println("✅ Admin user already has correct role 'system_admin'")
+	}
+
+	fmt.Println("Done. Admin: admin@vrmp.com / admin123 (role: system_admin)")
 }
