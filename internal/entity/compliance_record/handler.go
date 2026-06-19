@@ -2,12 +2,10 @@ package compliance_record
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
@@ -18,13 +16,11 @@ import (
 type Handler struct {
 	compRepo   *Repository
 	vendorRepo *vendor.Repository
-	nextCode   NextCodeFunc
+	nextCode   func(ctx context.Context, entity string) (string, error)
 	validate   *validator.Validate
 }
 
-type NextCodeFunc func(ctx context.Context, entity string) (string, error)
-
-func NewHandler(compRepo *Repository, vendorRepo *vendor.Repository, nextCode NextCodeFunc) *Handler {
+func NewHandler(compRepo *Repository, vendorRepo *vendor.Repository, nextCode func(ctx context.Context, entity string) (string, error)) *Handler {
 	return &Handler{
 		compRepo:   compRepo,
 		vendorRepo: vendorRepo,
@@ -33,35 +29,29 @@ func NewHandler(compRepo *Repository, vendorRepo *vendor.Repository, nextCode Ne
 	}
 }
 
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(c *fiber.Ctx) error {
 	var req CreateComplianceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
 
-	vendor, err := h.vendorRepo.FindByCode(r.Context(), req.VendorCode)
+	v, err := h.vendorRepo.FindByCode(c.Context(), req.VendorCode)
 	if err != nil {
-		http.Error(w, `{"error":"vendor not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "vendor not found"})
 	}
 
 	from, err := time.Parse("2006-01-02", req.ValidFrom)
 	if err != nil {
-		http.Error(w, `{"error":"invalid valid_from format"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid valid_from format"})
 	}
 	until, err := time.Parse("2006-01-02", req.ValidUntil)
 	if err != nil {
-		http.Error(w, `{"error":"invalid valid_until format"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid valid_until format"})
 	}
 
-	// Auto-compute status based on dates
 	status := "Pending"
 	if time.Now().After(until) {
 		status = "Expired"
@@ -69,18 +59,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		status = "Approved"
 	}
 
-	code, err := h.nextCode(r.Context(), "compliance_record")
+	code, err := h.nextCode(c.Context(), "compliance_record")
 	if err != nil {
-		http.Error(w, `{"error":"failed to generate code"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate code"})
 	}
 
-	claims := r.Context().Value(middleware.UserContextKey).(*services.Claims)
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
 	reviewedBy, _ := uuid.Parse(claims.UserID)
 
 	cr := &ComplianceRecord{
 		Code:              code,
-		VendorID:          vendor.ID,
+		VendorID:          v.ID,
 		CertificationType: req.CertificationType,
 		Status:            status,
 		ValidFrom:         &from,
@@ -90,45 +79,37 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		ReviewedBy:        &reviewedBy,
 	}
 
-	if err := h.compRepo.Create(r.Context(), cr); err != nil {
-		http.Error(w, `{"error":"failed to create compliance record"}`, http.StatusInternalServerError)
-		return
+	if err := h.compRepo.Create(c.Context(), cr); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create compliance record"})
 	}
 
-	cr.VendorCode = vendor.Code
+	cr.VendorCode = v.Code
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(cr)
+	return c.Status(fiber.StatusCreated).JSON(cr)
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	cr, err := h.compRepo.FindByCode(r.Context(), code)
+func (h *Handler) Get(c *fiber.Ctx) error {
+	code := c.Params("code")
+	cr, err := h.compRepo.FindByCode(c.Context(), code)
 	if err != nil {
-		http.Error(w, `{"error":"compliance record not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "compliance record not found"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cr)
+	return c.JSON(cr)
 }
 
-func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	existing, err := h.compRepo.FindByCode(r.Context(), code)
+func (h *Handler) Update(c *fiber.Ctx) error {
+	code := c.Params("code")
+	existing, err := h.compRepo.FindByCode(c.Context(), code)
 	if err != nil {
-		http.Error(w, `{"error":"compliance record not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "compliance record not found"})
 	}
 
 	var req UpdateComplianceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
 
 	if req.ValidFrom != "" {
@@ -144,43 +125,36 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	existing.IssuedBy = req.IssuedBy
 	existing.EvidenceURL = req.EvidenceURL
 
-	if err := h.compRepo.Update(r.Context(), existing); err != nil {
-		http.Error(w, `{"error":"failed to update compliance record"}`, http.StatusInternalServerError)
-		return
+	if err := h.compRepo.Update(c.Context(), existing); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update compliance record"})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(existing)
+	return c.JSON(existing)
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	vendorCode := r.URL.Query().Get("vendor_code")
-	vendor, err := h.vendorRepo.FindByCode(r.Context(), vendorCode)
+func (h *Handler) List(c *fiber.Ctx) error {
+	vendorCode := c.Query("vendor_code")
+	v, err := h.vendorRepo.FindByCode(c.Context(), vendorCode)
 	if err != nil {
-		http.Error(w, `{"error":"vendor not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "vendor not found"})
 	}
-	records, err := h.compRepo.ListByVendor(r.Context(), vendor.ID.String())
+	records, err := h.compRepo.ListByVendor(c.Context(), v.ID.String())
 	if err != nil {
-		http.Error(w, `{"error":"failed to list compliance records"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list compliance records"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(records)
+	return c.JSON(records)
 }
 
-func (h *Handler) Expiring(w http.ResponseWriter, r *http.Request) {
-	daysStr := r.URL.Query().Get("days")
+func (h *Handler) Expiring(c *fiber.Ctx) error {
+	daysStr := c.Query("days")
 	if daysStr == "" {
 		daysStr = "30"
 	}
 	days, _ := strconv.Atoi(daysStr)
 
-	records, err := h.compRepo.Expiring(r.Context(), days)
+	records, err := h.compRepo.Expiring(c.Context(), days)
 	if err != nil {
-		http.Error(w, `{"error":"failed to get expiring certifications"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get expiring certifications"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(records)
+	return c.JSON(records)
 }

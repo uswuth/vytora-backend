@@ -2,10 +2,8 @@ package user
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-playground/validator/v10"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -13,40 +11,36 @@ import (
 type NextCodeFunc func(ctx context.Context, entity string) (string, error)
 
 type Handler struct {
-	repo        *Repository
-	nextCode    NextCodeFunc
-	validate    *validator.Validate
+	repo     *Repository
+	nextCode NextCodeFunc
+	validate *validator.Validate
 }
 
 func NewHandler(repo *Repository, nextCode NextCodeFunc) *Handler {
 	return &Handler{
-		repo:        repo,
-		nextCode:    nextCode,
-		validate:    validator.New(),
+		repo:     repo,
+		nextCode: nextCode,
+		validate: validator.New(),
 	}
 }
 
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(c *fiber.Ctx) error {
 	var req CreateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
 
-	code, err := h.nextCode(r.Context(), "user")
+	code, err := h.nextCode(c.Context(), "user")
 	if err != nil {
-		http.Error(w, `{"error":"failed to generate user code"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate user code"})
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, `{"error":"failed to hash password"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to hash password"})
 	}
 
 	user := &User{
@@ -58,75 +52,63 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		IsActive:     true,
 	}
 
-	if err := h.repo.Create(r.Context(), user); err != nil {
-		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
-		return
+	if err := h.repo.Create(c.Context(), user); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create user"})
 	}
 
 	user.PasswordHash = ""
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	return c.Status(fiber.StatusCreated).JSON(user)
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	users, err := h.repo.ListAll(r.Context())
+func (h *Handler) List(c *fiber.Ctx) error {
+	users, err := h.repo.ListAll(c.Context())
 	if err != nil {
-		http.Error(w, `{"error":"failed to list users"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list users"})
 	}
 	for i := range users {
 		users[i].PasswordHash = ""
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	return c.JSON(users)
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	user, err := h.repo.FindByID(r.Context(), id)
+func (h *Handler) Get(c *fiber.Ctx) error {
+	id := c.Params("id")
+	user, err := h.repo.FindByID(c.Context(), id)
 	if err != nil {
-		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
 	user.PasswordHash = ""
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	return c.JSON(user)
 }
 
-func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+func (h *Handler) UpdateRole(c *fiber.Ctx) error {
+	id := c.Params("id")
 	var req UpdateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
-	if err := h.repo.UpdateRole(r.Context(), id, req.Role); err != nil {
-		http.Error(w, `{"error":"failed to update role"}`, http.StatusInternalServerError)
-		return
+	if err := h.repo.UpdateRole(c.Context(), id, req.Role); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update role"})
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func (h *Handler) Deactivate(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if err := h.repo.SetActive(r.Context(), id, false); err != nil {
-		http.Error(w, `{"error":"failed to deactivate user"}`, http.StatusInternalServerError)
-		return
+func (h *Handler) Deactivate(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if err := h.repo.SetActive(c.Context(), id, false); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to deactivate user"})
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func (h *Handler) Activate(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if err := h.repo.SetActive(r.Context(), id, true); err != nil {
-		http.Error(w, `{"error":"failed to activate user"}`, http.StatusInternalServerError)
-		return
+func (h *Handler) Activate(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if err := h.repo.SetActive(c.Context(), id, true); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to activate user"})
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }

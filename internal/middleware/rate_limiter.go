@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type RateLimiter struct {
@@ -41,9 +43,9 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
-func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+func (rl *RateLimiter) Middleware(next fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ip := c.IP()
 
 		rl.mu.Lock()
 		v, exists := rl.visitors[ip]
@@ -67,12 +69,10 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		if v.tokens > 0 {
 			v.tokens--
 			rl.mu.Unlock()
-			next.ServeHTTP(w, r)
-			return
+			return next(c)
 		}
 		rl.mu.Unlock()
 
-		w.Header().Set("Retry-After", "10")
-		http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
-	})
+		return c.Status(http.StatusTooManyRequests).JSON(fiber.Map{"error": "rate limit exceeded"})
+	}
 }

@@ -2,11 +2,9 @@ package category
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/uswuth/vytora-backend/internal/middleware"
@@ -29,30 +27,26 @@ func NewHandler(repo *Repository, nextCode NextCodeFunc) *Handler {
 	}
 }
 
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(c *fiber.Ctx) error {
 	var req CreateCategoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
 
-	existing, _ := h.repo.FindByName(r.Context(), req.Name)
+	existing, _ := h.repo.FindByName(c.Context(), req.Name)
 	if existing != nil {
-		http.Error(w, `{"error":"category with this name already exists"}`, http.StatusConflict)
-		return
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "category with this name already exists"})
 	}
 
-	code, err := h.nextCode(r.Context(), "category")
+	code, err := h.nextCode(c.Context(), "category")
 	if err != nil {
-		http.Error(w, `{"error":"failed to generate code"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate code"})
 	}
 
-	claims := r.Context().Value(middleware.UserContextKey).(*services.Claims)
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
 	createdBy, _ := uuid.Parse(claims.UserID)
 
 	cat := &Category{
@@ -64,72 +58,58 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:   &createdBy,
 	}
 
-	if err := h.repo.Create(r.Context(), cat); err != nil {
-		http.Error(w, `{"error":"failed to create category"}`, http.StatusInternalServerError)
-		return
+	if err := h.repo.Create(c.Context(), cat); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create category"})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(cat)
+	return c.Status(fiber.StatusCreated).JSON(cat)
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) List(c *fiber.Ctx) error {
 	params := ListParams{
-		Search: r.URL.Query().Get("search"),
-		Status: r.URL.Query().Get("status"),
+		Search: c.Query("search"),
+		Status: c.Query("status"),
 	}
-	if v := r.URL.Query().Get("limit"); v != "" {
+	if v := c.Query("limit"); v != "" {
 		params.Limit, _ = strconv.Atoi(v)
 	}
-	if v := r.URL.Query().Get("offset"); v != "" {
+	if v := c.Query("offset"); v != "" {
 		params.Offset, _ = strconv.Atoi(v)
 	}
 
-	cats, total, err := h.repo.List(r.Context(), params)
+	cats, total, err := h.repo.List(c.Context(), params)
 	if err != nil {
-		http.Error(w, `{"error":"failed to list categories"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list categories"})
 	}
 
-	resp := map[string]interface{}{
-		"data":  cats,
-		"total": total,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	return c.JSON(fiber.Map{"data": cats, "total": total})
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	cat, err := h.repo.FindByCode(r.Context(), code)
+func (h *Handler) Get(c *fiber.Ctx) error {
+	code := c.Params("code")
+	cat, err := h.repo.FindByCode(c.Context(), code)
 	if err != nil {
-		http.Error(w, `{"error":"category not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "category not found"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cat)
+	return c.JSON(cat)
 }
 
-func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	cat, err := h.repo.FindByCode(r.Context(), code)
+func (h *Handler) Update(c *fiber.Ctx) error {
+	code := c.Params("code")
+	cat, err := h.repo.FindByCode(c.Context(), code)
 	if err != nil {
-		http.Error(w, `{"error":"category not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "category not found"})
 	}
 
 	var req UpdateCategoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
 
-	claims := r.Context().Value(middleware.UserContextKey).(*services.Claims)
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
 	updatedBy, _ := uuid.Parse(claims.UserID)
 
 	cat.DisplayName = req.DisplayName
@@ -137,20 +117,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	cat.Status = req.Status
 	cat.UpdatedBy = &updatedBy
 
-	if err := h.repo.Update(r.Context(), cat); err != nil {
-		http.Error(w, `{"error":"failed to update category"}`, http.StatusInternalServerError)
-		return
+	if err := h.repo.Update(c.Context(), cat); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update category"})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cat)
+	return c.JSON(cat)
 }
 
-func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	if err := h.repo.Delete(r.Context(), code); err != nil {
-		http.Error(w, `{"error":"failed to delete category"}`, http.StatusInternalServerError)
-		return
+func (h *Handler) Delete(c *fiber.Ctx) error {
+	code := c.Params("code")
+	if err := h.repo.Delete(c.Context(), code); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete category"})
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }

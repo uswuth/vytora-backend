@@ -1,9 +1,7 @@
 package report
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/uswuth/vytora-backend/internal/middleware"
 	"github.com/uswuth/vytora-backend/internal/services"
@@ -19,10 +17,8 @@ func NewHandler(reportRepo *Repository) *Handler {
 	}
 }
 
-// getUserDeptID returns the assigned department manager UUID if the user is a department manager,
-// otherwise nil (meaning see all vendors).
-func getUserDeptID(r *http.Request) *uuid.UUID {
-	claims, ok := r.Context().Value(middleware.UserContextKey).(*services.Claims)
+func getUserDeptID(c *fiber.Ctx) *uuid.UUID {
+	claims, ok := c.Locals(middleware.UserContextKey).(*services.Claims)
 	if !ok {
 		return nil
 	}
@@ -35,24 +31,20 @@ func getUserDeptID(r *http.Request) *uuid.UUID {
 	return nil
 }
 
-func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
-	deptID := getUserDeptID(r)
-	summary, err := h.reportRepo.GetSummary(r.Context(), deptID)
+func (h *Handler) Summary(c *fiber.Ctx) error {
+	deptID := getUserDeptID(c)
+	summary, err := h.reportRepo.GetSummary(c.Context(), deptID)
 	if err != nil {
-		http.Error(w, `{"error":"failed to generate summary"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate summary"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	return c.JSON(summary)
 }
 
-func (h *Handler) MonthlyOnboarding(w http.ResponseWriter, r *http.Request) {
-	deptID := getUserDeptID(r)
-	data, err := h.reportRepo.GetMonthlyOnboarding(r.Context(), deptID)
+func (h *Handler) MonthlyOnboarding(c *fiber.Ctx) error {
+	deptID := getUserDeptID(c)
+	data, err := h.reportRepo.GetMonthlyOnboarding(c.Context(), deptID)
 	if err != nil {
-		http.Error(w, `{"error":"failed to get monthly onboarding"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get monthly onboarding"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	return c.JSON(data)
 }

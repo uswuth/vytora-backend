@@ -1,10 +1,9 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
@@ -12,29 +11,24 @@ type contextKey string
 
 const UserContextKey contextKey = "user"
 
-func AuthMiddleware(jwtService *services.JWTService) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
-				return
-			}
+func AuthMiddleware(jwtService *services.JWTService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing authorization header"})
+		}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				http.Error(w, `{"error":"invalid authorization format"}`, http.StatusUnauthorized)
-				return
-			}
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid authorization format"})
+		}
 
-			claims, err := jwtService.ValidateToken(parts[1])
-			if err != nil {
-				http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
-				return
-			}
+		claims, err := jwtService.ValidateToken(parts[1])
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid or expired token"})
+		}
 
-			ctx := context.WithValue(r.Context(), UserContextKey, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
+		c.Locals(UserContextKey, claims)
+		return c.Next()
 	}
 }

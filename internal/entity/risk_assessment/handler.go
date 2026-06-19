@@ -1,13 +1,10 @@
 package risk_assessment
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
@@ -15,16 +12,14 @@ import (
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
-type NextCodeFunc func(ctx context.Context, entity string) (string, error)
-
 type Handler struct {
 	repo         *Repository
 	vendorRepo   *vendor.Repository
-	nextCode     NextCodeFunc
+	nextCode     vendor.NextCodeFunc
 	validate     *validator.Validate
 }
 
-func NewHandler(repo *Repository, vendorRepo *vendor.Repository, nextCode NextCodeFunc) *Handler {
+func NewHandler(repo *Repository, vendorRepo *vendor.Repository, nextCode vendor.NextCodeFunc) *Handler {
 	return &Handler{
 		repo:       repo,
 		vendorRepo: vendorRepo,
@@ -33,36 +28,31 @@ func NewHandler(repo *Repository, vendorRepo *vendor.Repository, nextCode NextCo
 	}
 }
 
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(c *fiber.Ctx) error {
 	var req CreateRiskAssessmentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 	if err := h.validate.Struct(req); err != nil {
-		http.Error(w, `{"error":"validation failed"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "validation failed"})
 	}
 
-	v, err := h.vendorRepo.FindByCode(r.Context(), req.VendorCode)
+	v, err := h.vendorRepo.FindByCode(c.Context(), req.VendorCode)
 	if err != nil {
-		http.Error(w, `{"error":"vendor not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "vendor not found"})
 	}
 
 	assessmentDate, err := time.Parse("2006-01-02", req.AssessmentDate)
 	if err != nil {
-		http.Error(w, `{"error":"invalid assessment_date format"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid assessment_date format"})
 	}
 
-	code, err := h.nextCode(r.Context(), "risk_assessment")
+	code, err := h.nextCode(c.Context(), "risk_assessment")
 	if err != nil {
-		http.Error(w, `{"error":"failed to generate code"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate code"})
 	}
 
-	claims := r.Context().Value(middleware.UserContextKey).(*services.Claims)
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
 	reviewedBy, _ := uuid.Parse(claims.UserID)
 	now := time.Now()
 
@@ -79,69 +69,56 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		ReviewedAt:      &now,
 	}
 
-	if err := h.repo.Create(r.Context(), ra); err != nil {
-		http.Error(w, `{"error":"failed to create risk assessment"}`, http.StatusInternalServerError)
-		return
+	if err := h.repo.Create(c.Context(), ra); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create risk assessment"})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(ra)
+	return c.Status(fiber.StatusCreated).JSON(ra)
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	ra, err := h.repo.FindByCode(r.Context(), code)
+func (h *Handler) Get(c *fiber.Ctx) error {
+	code := c.Params("code")
+	ra, err := h.repo.FindByCode(c.Context(), code)
 	if err != nil {
-		http.Error(w, `{"error":"risk assessment not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "risk assessment not found"})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ra)
+	return c.JSON(ra)
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	vendorCode := r.URL.Query().Get("vendor_code")
+func (h *Handler) List(c *fiber.Ctx) error {
+	vendorCode := c.Query("vendor_code")
 	params := ListParams{
 		VendorCode: vendorCode,
-		RiskLevel:  r.URL.Query().Get("risk_level"),
-		Status:     r.URL.Query().Get("status"),
+		RiskLevel:  c.Query("risk_level"),
+		Status:     c.Query("status"),
 	}
-	if v := r.URL.Query().Get("limit"); v != "" {
+	if v := c.Query("limit"); v != "" {
 		params.Limit, _ = strconv.Atoi(v)
 	}
-	if v := r.URL.Query().Get("offset"); v != "" {
+	if v := c.Query("offset"); v != "" {
 		params.Offset, _ = strconv.Atoi(v)
 	}
 
-	assessments, total, err := h.repo.ListAll(r.Context(), params)
+	assessments, total, err := h.repo.ListAll(c.Context(), params)
 	if err != nil {
-		http.Error(w, `{"error":"failed to list risk assessments"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list risk assessments"})
 	}
 
-	resp := ListResponse{
-		Data:  assessments,
-		Total: total,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	return c.JSON(fiber.Map{"data": assessments, "total": total})
 }
 
-func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-	ra, err := h.repo.FindByCode(r.Context(), code)
+func (h *Handler) Approve(c *fiber.Ctx) error {
+	code := c.Params("code")
+	ra, err := h.repo.FindByCode(c.Context(), code)
 	if err != nil {
-		http.Error(w, `{"error":"risk assessment not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "risk assessment not found"})
 	}
 
 	ra.Status = "Approved"
 
-	if err := h.repo.Update(r.Context(), ra); err != nil {
-		http.Error(w, `{"error":"failed to approve risk assessment"}`, http.StatusInternalServerError)
-		return
+	if err := h.repo.Update(c.Context(), ra); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to approve risk assessment"})
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }
