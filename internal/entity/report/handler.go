@@ -48,3 +48,39 @@ func (h *Handler) MonthlyOnboarding(c *fiber.Ctx) error {
 	}
 	return c.JSON(data)
 }
+
+func (h *Handler) HighRiskVendors(c *fiber.Ctx) error {
+	deptID := getUserDeptID(c)
+	items, err := h.reportRepo.GetHighRiskVendors(c.Context(), deptID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get high-risk vendors"})
+	}
+	return c.JSON(items)
+}
+
+func (h *Handler) ExpiringContractsReport(c *fiber.Ctx) error {
+	deptID := getUserDeptID(c)
+	items, err := h.reportRepo.GetExpiringContractsReport(c.Context(), deptID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get expiring contracts report"})
+	}
+	return c.JSON(items)
+}
+
+func (h *Handler) ComplianceSummaryReport(c *fiber.Ctx) error {
+	deptID := getUserDeptID(c)
+	items, err := h.reportRepo.GetComplianceSummary(c.Context(), deptID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get compliance summary"})
+	}
+	return c.JSON(items)
+}
+
+func (h *Handler) TimeSeriesReport(c *fiber.Ctx) error {
+	deptID := getUserDeptID(c)
+	data, err := h.reportRepo.GetTimeSeries(c.Context(), deptID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get time series"})
+	}
+	return c.JSON(data)
+}

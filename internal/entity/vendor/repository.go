@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -56,6 +57,7 @@ type ListParams struct {
 	RiskLevel string
 	Status    string
 	Country   string
+	CreatedBy *uuid.UUID
 	Limit     int
 	Offset    int
 	SortBy    string
@@ -91,6 +93,11 @@ func (r *Repository) List(ctx context.Context, params ListParams) ([]Vendor, int
 	if params.Country != "" {
 		whereClauses = append(whereClauses, fmt.Sprintf("country = $%d", argIdx))
 		args = append(args, params.Country)
+		argIdx++
+	}
+	if params.CreatedBy != nil {
+		whereClauses = append(whereClauses, fmt.Sprintf("created_by = $%d", argIdx))
+		args = append(args, *params.CreatedBy)
 		argIdx++
 	}
 

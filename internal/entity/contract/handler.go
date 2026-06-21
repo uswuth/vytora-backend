@@ -6,20 +6,26 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/entity/audit_trail"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
+	"github.com/uswuth/vytora-backend/internal/middleware"
+	"github.com/uswuth/vytora-backend/internal/services"
 )
 
 type Handler struct {
 	contractRepo *Repository
 	vendorRepo   *vendor.Repository
+	auditLogger  *audit_trail.Logger
 	nextCode     vendor.NextCodeFunc
 	validate     *validator.Validate
 }
 
-func NewHandler(contractRepo *Repository, vendorRepo *vendor.Repository, nextCode vendor.NextCodeFunc) *Handler {
+func NewHandler(contractRepo *Repository, vendorRepo *vendor.Repository, auditLogger *audit_trail.Logger, nextCode vendor.NextCodeFunc) *Handler {
 	return &Handler{
 		contractRepo: contractRepo,
 		vendorRepo:   vendorRepo,
+		auditLogger:  auditLogger,
 		nextCode:     nextCode,
 		validate:     validator.New(),
 	}
@@ -53,6 +59,9 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate code"})
 	}
 
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+
 	contract := &Contract{
 		Code:           code,
 		VendorID:       v.ID,
@@ -66,6 +75,10 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 
 	if err := h.contractRepo.Create(c.Context(), contract); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create contract"})
+	}
+
+	if err := h.auditLogger.LogCreate(c.Context(), "contracts", contract.ID, changedBy, contract); err != nil {
+		// Log but don't fail the request
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(contract)
@@ -122,6 +135,9 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid end_date format"})
 	}
 
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+
 	contract.VendorID = v.ID
 	contract.VendorCode = v.Code
 	contract.ContractNumber = req.ContractNumber
@@ -134,14 +150,31 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update contract"})
 	}
 
+	if err := h.auditLogger.LogCreate(c.Context(), "contracts", contract.ID, changedBy, contract); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.JSON(contract)
 }
 
 func (h *Handler) Delete(c *fiber.Ctx) error {
 	code := c.Params("code")
+
+	contract, findErr := h.contractRepo.FindByCode(c.Context(), code)
+	if findErr != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "contract not found"})
+	}
+
 	if err := h.contractRepo.Delete(c.Context(), code); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "contract not found"})
 	}
+
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+	if err := h.auditLogger.LogDelete(c.Context(), "contracts", contract.ID, contract, changedBy); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

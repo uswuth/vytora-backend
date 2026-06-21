@@ -7,24 +7,27 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/entity/audit_trail"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
 	"github.com/uswuth/vytora-backend/internal/middleware"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
 
 type Handler struct {
-	repo         *Repository
-	vendorRepo   *vendor.Repository
-	nextCode     vendor.NextCodeFunc
-	validate     *validator.Validate
+	repo        *Repository
+	vendorRepo  *vendor.Repository
+	auditLogger *audit_trail.Logger
+	nextCode    vendor.NextCodeFunc
+	validate    *validator.Validate
 }
 
-func NewHandler(repo *Repository, vendorRepo *vendor.Repository, nextCode vendor.NextCodeFunc) *Handler {
+func NewHandler(repo *Repository, vendorRepo *vendor.Repository, auditLogger *audit_trail.Logger, nextCode vendor.NextCodeFunc) *Handler {
 	return &Handler{
-		repo:       repo,
-		vendorRepo: vendorRepo,
-		nextCode:   nextCode,
-		validate:   validator.New(),
+		repo:        repo,
+		vendorRepo:  vendorRepo,
+		auditLogger: auditLogger,
+		nextCode:    nextCode,
+		validate:    validator.New(),
 	}
 }
 
@@ -73,6 +76,10 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 
 	if err := h.repo.Create(c.Context(), ra); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create risk assessment"})
+	}
+
+	if err := h.auditLogger.LogCreateSimple(c.Context(), "risk_assessments", ra.ID, ra.Code, assessorID); err != nil {
+		// Log but don't fail the request
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(ra)
@@ -147,14 +154,31 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update risk assessment"})
 	}
 
+	if err := h.auditLogger.LogCreateSimple(c.Context(), "risk_assessments", ra.ID, ra.Code, assessorID); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.JSON(ra)
 }
 
 func (h *Handler) Delete(c *fiber.Ctx) error {
 	code := c.Params("code")
+
+	ra, err := h.repo.FindByCode(c.Context(), code)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "risk assessment not found"})
+	}
+
 	if err := h.repo.Delete(c.Context(), code); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "risk assessment not found"})
 	}
+
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+	if err := h.auditLogger.LogDeleteSimple(c.Context(), "risk_assessments", ra.ID, ra.Code, changedBy); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -165,10 +189,17 @@ func (h *Handler) Approve(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "risk assessment not found"})
 	}
 
+	oldStatus := ra.Status
 	ra.Status = "Approved"
 
 	if err := h.repo.Update(c.Context(), ra); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to approve risk assessment"})
+	}
+
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+	if err := h.auditLogger.LogUpdateField(c.Context(), "risk_assessments", ra.ID, "status", oldStatus, "Approved", changedBy); err != nil {
+		// Log but don't fail the request
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)

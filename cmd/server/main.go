@@ -14,10 +14,12 @@ import (
 	"github.com/uswuth/vytora-backend/internal/entity/category"
 	"github.com/uswuth/vytora-backend/internal/entity/compliance_record"
 	"github.com/uswuth/vytora-backend/internal/entity/contract"
+	"github.com/uswuth/vytora-backend/internal/entity/export"
 	"github.com/uswuth/vytora-backend/internal/entity/report"
 	"github.com/uswuth/vytora-backend/internal/entity/risk_assessment"
 	"github.com/uswuth/vytora-backend/internal/entity/user"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
+	"github.com/uswuth/vytora-backend/internal/entity/vendor_contact"
 	"github.com/uswuth/vytora-backend/internal/handlers"
 	"github.com/uswuth/vytora-backend/internal/middleware"
 	"github.com/uswuth/vytora-backend/internal/services"
@@ -42,6 +44,7 @@ func main() {
 	auditRepo := audit_trail.NewRepository(database.Pool)
 	reportRepo := report.NewRepository(database.Pool)
 	categoryRepo := category.NewRepository(database.Pool)
+	contactRepo := vendor_contact.NewRepository(database.Pool)
 
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
 	secretPrefix := cfg.JWTSecret
@@ -51,17 +54,22 @@ func main() {
 	logger.Info().Str("jwt_secret_prefix", secretPrefix).Msg("JWT secret loaded")
 	seqService := services.NewSequenceService(database.Pool)
 
+	// Audit logger
+	auditLogger := audit_trail.NewLogger(auditRepo, seqService.NextCode)
+
 	// handler
 	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
 	userManagementHandler := user.NewHandler(userRepo, seqService.NextCode)
-	vendorHandler := vendor.NewHandler(vendorRepo, categoryRepo, seqService.NextCode)
-	riskAssessmentHandler := risk_assessment.NewHandler(riskAssessmentRepo, vendorRepo, seqService.NextCode)
-	compHandler := compliance_record.NewHandler(compRepo, vendorRepo, seqService.NextCode)
-	contractHandler := contract.NewHandler(contractRepo, vendorRepo, seqService.NextCode)
+	vendorHandler := vendor.NewHandler(vendorRepo, categoryRepo, auditLogger, seqService.NextCode)
+	riskAssessmentHandler := risk_assessment.NewHandler(riskAssessmentRepo, vendorRepo, auditLogger, seqService.NextCode)
+	compHandler := compliance_record.NewHandler(compRepo, vendorRepo, auditLogger, seqService.NextCode)
+	contractHandler := contract.NewHandler(contractRepo, vendorRepo, auditLogger, seqService.NextCode)
 	workflowHandler := vendor.NewWorkflowHandler(vendorRepo, auditRepo, seqService.NextCode)
 	auditHandler := audit_trail.NewHandler(auditRepo)
 	reportHandler := report.NewHandler(reportRepo)
 	categoryHandler := category.NewHandler(categoryRepo, seqService.NextCode)
+	contactHandler := vendor_contact.NewHandler(contactRepo, vendorRepo, seqService.NextCode)
+	exportHandler := export.NewHandler(vendorRepo, riskAssessmentRepo, compRepo, contractRepo)
 
 	app := fiber.New()
 
@@ -134,6 +142,13 @@ func main() {
 	vendorDeleteGroup := protected.Group("/vendors", middleware.RequirePermission("canDeleteVendor"))
 	vendorDeleteGroup.Delete("/:code", vendorHandler.Delete)
 
+	// Vendor contacts (nested under vendors)
+	contactGroup := protected.Group("/vendors/:code/contacts", middleware.RequirePermission("canEditVendor"))
+	contactGroup.Get("", contactHandler.List)
+	contactGroup.Post("", contactHandler.Create)
+	contactGroup.Put("/:id", contactHandler.Update)
+	contactGroup.Delete("/:id", contactHandler.Delete)
+
 	// Workflow
 	protected.Put("/vendors/:code/submit", workflowHandler.Submit, middleware.RequirePermission("canSubmitVendorRequest"))
 	protected.Put("/vendors/:code/review-risk", workflowHandler.ReviewRisk, middleware.RequirePermission("canReviewRisk"))
@@ -181,6 +196,18 @@ func main() {
 	protected.Get("/reports/monthly-onboarding", reportHandler.MonthlyOnboarding, middleware.RequirePermission("canAccessAllReports"))
 	protected.Get("/reports/summary-2", reportHandler.Summary, middleware.RequirePermission("canViewAssignedVendors"))
 	protected.Get("/reports/monthly-onboarding-2", reportHandler.MonthlyOnboarding, middleware.RequirePermission("canViewAssignedVendors"))
+
+	// New Phase B report endpoints
+	protected.Get("/reports/high-risk-vendors", reportHandler.HighRiskVendors, middleware.RequirePermission("canAccessAllReports"))
+	protected.Get("/reports/expiring-contracts", reportHandler.ExpiringContractsReport, middleware.RequirePermission("canAccessAllReports"))
+	protected.Get("/reports/compliance-summary", reportHandler.ComplianceSummaryReport, middleware.RequirePermission("canAccessAllReports"))
+	protected.Get("/reports/time-series", reportHandler.TimeSeriesReport, middleware.RequirePermission("canAccessAllReports"))
+
+	// CSV/Excel exports
+	protected.Get("/exports/vendors", exportHandler.VendorsCSV, middleware.RequirePermission("canAccessAllReports"))
+	protected.Get("/exports/risks", exportHandler.RisksCSV, middleware.RequirePermission("canAccessAllReports"))
+	protected.Get("/exports/compliance", exportHandler.ComplianceCSV, middleware.RequirePermission("canAccessAllReports"))
+	protected.Get("/exports/contracts", exportHandler.ContractsCSV, middleware.RequirePermission("canAccessAllReports"))
 
 	// Category routes
 	catManageGroup := protected.Group("/categories", middleware.RequirePermission("canManageCategories"))

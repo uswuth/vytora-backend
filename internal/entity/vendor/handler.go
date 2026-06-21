@@ -9,7 +9,9 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/uswuth/vytora-backend/internal/entity/audit_trail"
 	"github.com/uswuth/vytora-backend/internal/entity/category"
+	"github.com/uswuth/vytora-backend/internal/handlers"
 	"github.com/uswuth/vytora-backend/internal/middleware"
 	"github.com/uswuth/vytora-backend/internal/services"
 )
@@ -19,14 +21,16 @@ type NextCodeFunc func(ctx context.Context, entity string) (string, error)
 type Handler struct {
 	vendorRepo   *Repository
 	categoryRepo *category.Repository
+	auditLogger  *audit_trail.Logger
 	nextCode     NextCodeFunc
 	validate     *validator.Validate
 }
 
-func NewHandler(vendorRepo *Repository, categoryRepo *category.Repository, nextCode NextCodeFunc) *Handler {
+func NewHandler(vendorRepo *Repository, categoryRepo *category.Repository, auditLogger *audit_trail.Logger, nextCode NextCodeFunc) *Handler {
 	return &Handler{
 		vendorRepo:   vendorRepo,
 		categoryRepo: categoryRepo,
+		auditLogger:  auditLogger,
 		nextCode:     nextCode,
 		validate:     validator.New(),
 	}
@@ -72,6 +76,10 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create vendor"})
 	}
 
+	if err := h.auditLogger.LogCreate(c.Context(), "vendors", vendor.ID, createdBy, vendor); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(vendor)
 }
 
@@ -88,6 +96,8 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 }
 
 func (h *Handler) List(c *fiber.Ctx) error {
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+
 	params := ListParams{
 		Search:    c.Query("search"),
 		Category:  c.Query("category"),
@@ -96,6 +106,12 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		Country:   c.Query("country"),
 		SortBy:    c.Query("sort_by"),
 		SortOrder: c.Query("sort_order"),
+	}
+
+	// Department managers only see vendors they created
+	if claims.Role == "department_manager" {
+		uid, _ := uuid.Parse(claims.UserID)
+		params.CreatedBy = &uid
 	}
 	if v := c.Query("limit"); v != "" {
 		params.Limit, _ = strconv.Atoi(v)
@@ -147,13 +163,35 @@ func (h *Handler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update vendor"})
 	}
 
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+	if err := h.auditLogger.LogCreate(c.Context(), "vendors", existing.ID, changedBy, existing); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.JSON(existing)
 }
 
 func (h *Handler) Delete(c *fiber.Ctx) error {
 	code := c.Params("code")
-	if err := h.vendorRepo.Delete(c.Context(), code); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete vendor"})
+
+	vendor, findErr := h.vendorRepo.FindByCode(c.Context(), code)
+	if findErr != nil {
+		if errors.Is(findErr, pgx.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "vendor not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to find vendor"})
 	}
+
+	if err := h.vendorRepo.Delete(c.Context(), code); err != nil {
+		return handlers.HandleError(c, err)
+	}
+
+	claims := c.Locals(middleware.UserContextKey).(*services.Claims)
+	changedBy, _ := uuid.Parse(claims.UserID)
+	if err := h.auditLogger.LogDelete(c.Context(), "vendors", vendor.ID, vendor, changedBy); err != nil {
+		// Log but don't fail the request
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
