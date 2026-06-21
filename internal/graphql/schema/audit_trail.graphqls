@@ -1,0 +1,17 @@
+type AuditTrail {
+  id: ID!
+  code: String!
+  tableName: String!
+  recordId: ID!
+  recordCode: String
+  action: String!
+  fieldName: String
+  oldValue: String
+  newValue: String
+  changedBy: ID!
+  changedAt: DateTime!
+}
+
+extend type Query {
+  auditTrails(tableName: String, recordCode: String, action: String, changedBy: String, dateFrom: String, dateTo: String, limit: Int=20, offset: Int=0): [AuditTrail!]! @hasPermission(permission: "canViewAuditHistory")
+}

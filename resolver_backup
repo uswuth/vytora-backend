@@ -1,0 +1,76 @@
+package resolver
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/uswuth/vytora-backend/internal/entity/audit_trail"
+	"github.com/uswuth/vytora-backend/internal/graphql/model"
+)
+
+func (r *queryResolver) AuditTrails(ctx context.Context, tableName *string, recordCode *string, action *string, changedBy *string, dateFrom *string, dateTo *string, limit *int, offset *int) ([]*model.AuditTrail, error) {
+	params := audit_trail.ListParams{}
+	if tableName != nil {
+		params.TableName = *tableName
+	}
+	if recordCode != nil {
+		params.RecordCode = *recordCode
+	}
+	if action != nil {
+		params.Action = *action
+	}
+	if changedBy != nil {
+		params.ChangedBy = *changedBy
+	}
+	if dateFrom != nil {
+		params.DateFrom = *dateFrom
+	}
+	if dateTo != nil {
+		params.DateTo = *dateTo
+	}
+	if limit != nil {
+		params.Limit = *limit
+	}
+	if offset != nil {
+		params.Offset = *offset
+	}
+
+	trails, _, err := r.AuditRepo.List(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.AuditTrail, len(trails))
+	for i, t := range trails {
+		var recordCodeStr *string
+		if t.RecordCode != "" {
+			recordCodeStr = &t.RecordCode
+		}
+		var fieldName *string
+		if t.FieldName != "" {
+			fieldName = &t.FieldName
+		}
+		var oldValue *string
+		if t.OldValue != "" {
+			oldValue = &t.OldValue
+		}
+		var newValue *string
+		if t.NewValue != "" {
+			newValue = &t.NewValue
+		}
+		result[i] = &model.AuditTrail{
+			ID:          t.ID.String(),
+			Code:        t.Code,
+			TableName:   t.TableName,
+			RecordID:    t.RecordID.String(),
+			RecordCode:  recordCodeStr,
+			Action:      t.Action,
+			FieldName:   fieldName,
+			OldValue:    oldValue,
+			NewValue:    newValue,
+			ChangedBy:   t.ChangedBy.String(),
+			ChangedAt:   t.ChangedAt,
+		}
+	}
+	return result, nil
+}

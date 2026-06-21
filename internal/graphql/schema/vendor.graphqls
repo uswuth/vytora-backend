@@ -1,0 +1,86 @@
+type Vendor {
+  id: ID!
+  code: String!
+  name: String!
+  category: String!
+  contactPerson: String
+  contactEmail: String
+  country: String
+  riskLevel: RiskLevel!
+  status: VendorStatus!
+  assignedDeptManagerID: ID
+  createdBy: ID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  contacts: [VendorContact!]!
+  riskAssessments: [RiskAssessment!]!
+  complianceRecords: [ComplianceRecord!]!
+  contracts: [Contract!]!
+}
+
+enum RiskLevel {
+  Low
+  Medium
+  High
+  Critical
+}
+
+enum VendorStatus {
+  Draft
+  Submitted
+  RiskReview
+  ComplianceReview
+  Approved
+  Rejected
+  Active
+  Inactive
+}
+
+input CreateVendorInput {
+  name: String!
+  category: String!
+  contactPerson: String
+  contactEmail: String
+  country: String
+  riskLevel: RiskLevel!
+}
+
+input UpdateVendorInput {
+  name: String!
+  category: String!
+  contactPerson: String
+  contactEmail: String
+  country: String
+  riskLevel: RiskLevel!
+  status: VendorStatus!
+}
+
+input VendorListFilter {
+  search: String
+  category: String
+  riskLevel: RiskLevel
+  status: VendorStatus
+  country: String
+  createdBy: ID
+}
+
+type VendorList {
+  data: [Vendor!]!
+  total: Int!
+}
+
+extend type Query {
+  vendors(filter: VendorListFilter, limit: Int=20, offset: Int=0, sortBy: String="created_at", sortOrder: String="DESC"): VendorList! @isAuthenticated
+  vendor(code: String!): Vendor @isAuthenticated
+}
+
+extend type Mutation {
+  createVendor(input: CreateVendorInput!): Vendor! @hasPermission(permission: "canCreateVendor")
+  updateVendor(code: String!, input: UpdateVendorInput!): Vendor! @hasPermission(permission: "canEditVendor")
+  deleteVendor(code: String!): Boolean! @hasPermission(permission: "canDeleteVendor")
+  submitVendor(code: String!): Boolean! @hasPermission(permission: "canSubmitVendorRequest")
+  reviewVendorRisk(code: String!): Boolean! @hasPermission(permission: "canReviewRisk")
+  reviewVendorCompliance(code: String!): Boolean! @hasPermission(permission: "canReviewCompliance")
+  approveVendor(code: String!): Boolean! @hasPermission(permission: "canEditVendor")
+  rejectVendor(code: String!): Boolean! @hasPermission(permission: "canEditVendor")
+}

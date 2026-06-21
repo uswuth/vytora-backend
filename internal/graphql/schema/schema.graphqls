@@ -1,0 +1,12 @@
+scalar DateTime
+
+directive @isAuthenticated on FIELD_DEFINITION
+directive @hasPermission(permission: String!) on FIELD_DEFINITION
+
+type Query {
+  _empty: String
+}
+
+type Mutation {
+  _empty: String
+}

@@ -1,0 +1,60 @@
+type RiskAssessment {
+  id: ID!
+  code: String!
+  vendorId: ID!
+  vendorCode: String
+  assessmentDate: DateTime!
+  assessorId: ID
+  overallRiskScore: Float!
+  riskLevel: RiskLevel!
+  securityRiskScore: Float!
+  financialRiskScore: Float!
+  operationalRiskScore: Float!
+  legalRiskScore: Float!
+  status: AssessmentStatus!
+  notes: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+enum AssessmentStatus {
+  Draft
+  Reviewed
+  Approved
+}
+
+input CreateRiskAssessmentInput {
+  vendorCode: String!
+  assessmentDate: DateTime!
+  overallRiskScore: Float!
+  riskLevel: RiskLevel!
+  securityRiskScore: Float!
+  financialRiskScore: Float!
+  operationalRiskScore: Float!
+  legalRiskScore: Float!
+  notes: String
+}
+
+input UpdateRiskAssessmentInput {
+  assessmentDate: DateTime!
+  overallRiskScore: Float!
+  riskLevel: RiskLevel!
+  securityRiskScore: Float!
+  financialRiskScore: Float!
+  operationalRiskScore: Float!
+  legalRiskScore: Float!
+  status: AssessmentStatus!
+  notes: String
+}
+
+extend type Query {
+  riskAssessments(vendorCode: String, riskLevel: RiskLevel, status: AssessmentStatus, limit: Int=20, offset: Int=0): [RiskAssessment!]! @isAuthenticated
+  riskAssessment(code: String!): RiskAssessment @isAuthenticated
+}
+
+extend type Mutation {
+  createRiskAssessment(input: CreateRiskAssessmentInput!): RiskAssessment! @hasPermission(permission: "canCreateRiskAssessment")
+  updateRiskAssessment(code: String!, input: UpdateRiskAssessmentInput!): RiskAssessment! @hasPermission(permission: "canReviewRisk")
+  deleteRiskAssessment(code: String!): Boolean! @hasPermission(permission: "canReviewRisk")
+  approveRiskAssessment(code: String!): Boolean! @hasPermission(permission: "canApproveRisk")
+}

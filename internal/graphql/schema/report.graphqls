@@ -1,0 +1,73 @@
+type SummaryReport {
+  totalVendors: Int!
+  vendorsByStatus: [KeyValue!]!
+  vendorsByRiskLevel: [KeyValue!]!
+  expiringContracts30: Int!
+  expiringContracts60: Int!
+  expiringContracts90: Int!
+  expiringCompliance30: Int!
+  expiringCompliance60: Int!
+  expiringCompliance90: Int!
+  pendingRiskAssessments: Int!
+  approvedRiskAssessments: Int!
+}
+
+type KeyValue {
+  key: String!
+  value: Int!
+}
+
+type MonthlyOnboarding {
+  month: String!
+  count: Int!
+}
+
+type HighRiskVendor {
+  code: String!
+  name: String!
+  category: String!
+  riskLevel: String!
+  overallRiskScore: Float
+  latestAssessment: String
+  assessmentStatus: String
+  expiringContracts30: Int
+}
+
+type ExpiringContract {
+  code: String!
+  vendorName: String!
+  vendorCode: String!
+  contractNumber: String!
+  endDate: String!
+  daysRemaining: Int!
+  renewalStatus: String!
+  contractValue: Float
+}
+
+type ComplianceSummaryItem {
+  certificationType: String!
+  approved: Int!
+  pending: Int!
+  expired: Int!
+  total: Int!
+}
+
+type TimeSeriesPoint {
+  date: String!
+  count: Int!
+}
+
+type TimeSeries {
+  vendors: [TimeSeriesPoint!]!
+  riskAssessments: [TimeSeriesPoint!]!
+  compliance: [TimeSeriesPoint!]!
+}
+
+extend type Query {
+  summaryReport: SummaryReport! @hasPermission(permission: "canAccessAllReports")
+  monthlyOnboarding: [MonthlyOnboarding!]! @hasPermission(permission: "canAccessAllReports")
+  highRiskVendors: [HighRiskVendor!]! @hasPermission(permission: "canAccessAllReports")
+  expiringContractsReport: [ExpiringContract!]! @hasPermission(permission: "canAccessAllReports")
+  complianceSummaryReport: [ComplianceSummaryItem!]! @hasPermission(permission: "canAccessAllReports")
+  timeSeriesReport: TimeSeries! @hasPermission(permission: "canAccessAllReports")
+}

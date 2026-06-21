@@ -1,0 +1,58 @@
+type ComplianceRecord {
+  id: ID!
+  code: String!
+  vendorId: ID!
+  vendorCode: String
+  certificationType: CertificationType!
+  status: ComplianceStatus!
+  validFrom: DateTime
+  validUntil: DateTime
+  issuedBy: String
+  evidenceUrl: String
+  reviewedBy: ID
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+enum CertificationType {
+  ISO27001
+  SOC2
+  GDPR
+  PCI_DSS
+}
+
+enum ComplianceStatus {
+  Pending
+  Approved
+  Expired
+}
+
+input CreateComplianceInput {
+  vendorCode: String!
+  certificationType: CertificationType!
+  validFrom: DateTime
+  validUntil: DateTime
+  issuedBy: String
+  evidenceUrl: String
+}
+
+input UpdateComplianceInput {
+  certificationType: CertificationType!
+  status: ComplianceStatus!
+  validFrom: DateTime
+  validUntil: DateTime
+  issuedBy: String
+  evidenceUrl: String
+}
+
+extend type Query {
+  complianceRecords(vendorCode: String!): [ComplianceRecord!]! @isAuthenticated
+  complianceRecord(code: String!): ComplianceRecord @isAuthenticated
+  expiringCompliance(days: Int=30): [ComplianceRecord!]! @isAuthenticated
+}
+
+extend type Mutation {
+  createComplianceRecord(input: CreateComplianceInput!): ComplianceRecord! @hasPermission(permission: "canReviewCompliance")
+  updateComplianceRecord(code: String!, input: UpdateComplianceInput!): ComplianceRecord! @hasPermission(permission: "canReviewCompliance")
+  deleteComplianceRecord(code: String!): Boolean! @hasPermission(permission: "canReviewCompliance")
+}
