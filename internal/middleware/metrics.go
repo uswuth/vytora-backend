@@ -29,8 +29,8 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(httpReqDur)
-	prometheus.MustRegister(httpReqTotal)
+	prometheus.Register(httpReqDur)
+	prometheus.Register(httpReqTotal)
 }
 
 func MetricsMiddleware(c *fiber.Ctx) error {
