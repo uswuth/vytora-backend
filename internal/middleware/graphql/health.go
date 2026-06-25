@@ -2,7 +2,9 @@ package graphql
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,6 +25,10 @@ func HealthCheckHandler(allowedIPs []string) http.HandlerFunc {
 		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 			ip = fwd
 		}
+		if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
+		}
+		ip = strings.TrimSpace(ip)
 		if !allowed[ip] {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -45,6 +51,10 @@ func ReadinessHandler(allowedIPs []string, pool *pgxpool.Pool) http.HandlerFunc 
 		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 			ip = fwd
 		}
+		if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
+		}
+		ip = strings.TrimSpace(ip)
 		if !allowed[ip] {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return

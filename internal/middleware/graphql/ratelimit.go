@@ -1,7 +1,9 @@
 package graphql
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,15 +43,30 @@ func (l *limiter) cleanup() {
 	}
 }
 
+// clientIP extracts the real client IP, handling X-Forwarded-For and stripping the port from RemoteAddr.
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		parts := strings.Split(fwd, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
 func (l *limiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+		ip := clientIP(r)
+
 		l.mu.Lock()
 		v, exists := l.visitors[ip]
 		if !exists {
 			v = &visitor{tokens: l.rate, lastCheck: time.Now()}
 			l.visitors[ip] = v
 		}
+
 		now := time.Now()
 		elapsed := now.Sub(v.lastCheck)
 		newTokens := int(elapsed.Seconds() * float64(l.rate) / l.interval.Seconds())
@@ -60,6 +77,7 @@ func (l *limiter) middleware(next http.Handler) http.Handler {
 			}
 			v.lastCheck = now
 		}
+
 		if v.tokens > 0 {
 			v.tokens--
 			l.mu.Unlock()
@@ -67,6 +85,7 @@ func (l *limiter) middleware(next http.Handler) http.Handler {
 			return
 		}
 		l.mu.Unlock()
+
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 	})
 }

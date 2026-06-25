@@ -18,7 +18,7 @@ import (
 )
 
 func GetClaims(ctx context.Context) (*services.Claims, error) {
-	c, ok := ctx.Value("user").(*services.Claims)
+	c, ok := ctx.Value(graphqlmiddleware.UserContextKey).(*services.Claims)
 	if !ok || c == nil {
 		return nil, fmt.Errorf("unauthorized")
 	}

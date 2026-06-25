@@ -9,20 +9,93 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/entity/vendor_contact"
 	"github.com/uswuth/vytora-backend/internal/graphql/model"
 )
 
 // CreateContact is the resolver for the createContact field.
 func (r *mutationResolver) CreateContact(ctx context.Context, vendorCode string, input model.CreateContactInput) (*model.VendorContact, error) {
-	panic(fmt.Errorf("not implemented: CreateContact - createContact"))
+	v, err := r.VendorRepo.FindByCode(ctx, vendorCode)
+	if err != nil {
+		return nil, fmt.Errorf("vendor not found: %w", err)
+	}
+	if v == nil {
+		return nil, &ValidationError{Message: "vendor not found"}
+	}
+
+	code, err := r.SeqService.NextCode(ctx, "vendor_contact")
+	if err != nil {
+		return nil, err
+	}
+
+	contact := &vendor_contact.VendorContact{
+		Code:     code,
+		VendorID: v.ID,
+		Name:     input.Name,
+		Email:    derefString(input.Email),
+		Phone:    derefString(input.Phone),
+	}
+
+	if err := r.ContactRepo.Create(ctx, contact); err != nil {
+		return nil, err
+	}
+
+	return &model.VendorContact{
+		ID:        contact.ID.String(),
+		Code:      contact.Code,
+		VendorID:  contact.VendorID.String(),
+		Name:      contact.Name,
+		Email:     strPtrIfNotEmpty(contact.Email),
+		Phone:     strPtrIfNotEmpty(contact.Phone),
+		CreatedAt: contact.CreatedAt,
+	}, nil
 }
 
 // UpdateContact is the resolver for the updateContact field.
 func (r *mutationResolver) UpdateContact(ctx context.Context, id string, input model.UpdateContactInput) (*model.VendorContact, error) {
-	panic(fmt.Errorf("not implemented: UpdateContact - updateContact"))
+	contactID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, &ValidationError{Message: "invalid contact id"}
+	}
+
+	contact, err := r.ContactRepo.FindByID(ctx, contactID)
+	if err != nil {
+		return nil, err
+	}
+	if contact == nil {
+		return nil, &ValidationError{Message: "contact not found"}
+	}
+
+	contact.Name = input.Name
+	contact.Email = derefString(input.Email)
+	contact.Phone = derefString(input.Phone)
+
+	if err := r.ContactRepo.Update(ctx, contact); err != nil {
+		return nil, err
+	}
+
+	return &model.VendorContact{
+		ID:        contact.ID.String(),
+		Code:      contact.Code,
+		VendorID:  contact.VendorID.String(),
+		Name:      contact.Name,
+		Email:     strPtrIfNotEmpty(contact.Email),
+		Phone:     strPtrIfNotEmpty(contact.Phone),
+		CreatedAt: contact.CreatedAt,
+	}, nil
 }
 
 // DeleteContact is the resolver for the deleteContact field.
 func (r *mutationResolver) DeleteContact(ctx context.Context, id string) (bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteContact - deleteContact"))
+	contactID, err := uuid.Parse(id)
+	if err != nil {
+		return false, &ValidationError{Message: "invalid contact id"}
+	}
+
+	if err := r.ContactRepo.Delete(ctx, contactID); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

@@ -45,6 +45,12 @@ mutation Login($email: String!, $password: String!) {
     }
   }
 }
+# variable 
+
+{
+  "email": "admin@vrmp.com",
+  "password": "admin123"
+}
 
 mutation ExtendSession {
   extendSession {
