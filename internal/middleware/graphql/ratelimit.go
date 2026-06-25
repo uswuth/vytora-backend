@@ -1,11 +1,11 @@
 package graphql
 
 import (
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/uswuth/vytora-backend/internal/common/httputil"
 )
 
 func RateLimiter(rate int, interval time.Duration) func(next http.Handler) http.Handler {
@@ -43,22 +43,9 @@ func (l *limiter) cleanup() {
 	}
 }
 
-// clientIP extracts the real client IP, handling X-Forwarded-For and stripping the port from RemoteAddr.
-func clientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		parts := strings.Split(fwd, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
 func (l *limiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		ip := httputil.ClientIP(r)
 
 		l.mu.Lock()
 		v, exists := l.visitors[ip]

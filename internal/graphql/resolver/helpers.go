@@ -3,7 +3,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/uswuth/vytora-backend/internal/entity/category"
@@ -15,6 +14,8 @@ import (
 	"github.com/uswuth/vytora-backend/internal/graphql/model"
 	"github.com/uswuth/vytora-backend/internal/services"
 	graphqlmiddleware "github.com/uswuth/vytora-backend/internal/middleware/graphql"
+
+	"github.com/uswuth/vytora-backend/internal/common/ptr"
 )
 
 func GetClaims(ctx context.Context) (*services.Claims, error) {
@@ -25,32 +26,23 @@ func GetClaims(ctx context.Context) (*services.Claims, error) {
 	return c, nil
 }
 
-func stringPtr(s string) *string {
-	return &s
+func GetRawToken(ctx context.Context) (string, bool) {
+	return graphqlmiddleware.GetRawToken(ctx)
 }
 
-func strPtrIfNotEmpty(s string) *string {
-	if s == "" {
+func getDepartmentManagerID(ctx context.Context) *uuid.UUID {
+	claims, err := GetClaims(ctx)
+	if err != nil || claims.Role != "department_manager" {
 		return nil
 	}
-	return &s
-}
-
-func uuidPtrToStrPtr(u *uuid.UUID) *string {
-	if u == nil {
+	uid, err := uuid.Parse(claims.UserID)
+	if err != nil {
 		return nil
 	}
-	s := u.String()
-	return &s
+	return &uid
 }
 
-func ptrTime(t *time.Time) *time.Time {
-	return t
-}
-
-func ptrFloat64(f *float64) *float64 {
-	return f
-}
+// Mapper functions: convert entity types to GraphQL model types.
 
 func mapCategoryToGraphQL(c *category.Category) *model.Category {
 	return &model.Category{
@@ -58,10 +50,10 @@ func mapCategoryToGraphQL(c *category.Category) *model.Category {
 		Code:        c.Code,
 		Name:        c.Name,
 		DisplayName: c.DisplayName,
-		Description: strPtrIfNotEmpty(c.Description),
+		Description: ptr.StrIfNotEmpty(c.Description),
 		Status:      model.CategoryStatus(c.Status),
-		CreatedBy:   uuidPtrToStrPtr(c.CreatedBy),
-		UpdatedBy:   uuidPtrToStrPtr(c.UpdatedBy),
+		CreatedBy:   ptr.UUIDStr(c.CreatedBy),
+		UpdatedBy:   ptr.UUIDStr(c.UpdatedBy),
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.CreatedAt,
 	}
@@ -72,14 +64,14 @@ func mapComplianceRecordToGraphQL(c *complrec.ComplianceRecord) *model.Complianc
 		ID:                c.ID.String(),
 		Code:              c.Code,
 		VendorID:          c.VendorID.String(),
-		VendorCode:        strPtrIfNotEmpty(c.VendorCode),
+		VendorCode:        ptr.StrIfNotEmpty(c.VendorCode),
 		CertificationType: model.CertificationType(c.CertificationType),
 		Status:            model.ComplianceStatus(c.Status),
-		ValidFrom:         ptrTime(c.ValidFrom),
-		ValidUntil:        ptrTime(c.ValidUntil),
-		IssuedBy:          strPtrIfNotEmpty(c.IssuedBy),
-		EvidenceURL:       strPtrIfNotEmpty(c.EvidenceURL),
-		ReviewedBy:        uuidPtrToStrPtr(c.ReviewedBy),
+		ValidFrom:         c.ValidFrom,
+		ValidUntil:        c.ValidUntil,
+		IssuedBy:          ptr.StrIfNotEmpty(c.IssuedBy),
+		EvidenceURL:       ptr.StrIfNotEmpty(c.EvidenceURL),
+		ReviewedBy:        ptr.UUIDStr(c.ReviewedBy),
 		CreatedAt:         c.CreatedAt,
 		UpdatedAt:         c.UpdatedAt,
 	}
@@ -90,11 +82,11 @@ func mapContractToGraphQL(c *contract.Contract) *model.Contract {
 		ID:             c.ID.String(),
 		Code:           c.Code,
 		VendorID:       c.VendorID.String(),
-		VendorCode:     strPtrIfNotEmpty(c.VendorCode),
+		VendorCode:     ptr.StrIfNotEmpty(c.VendorCode),
 		ContractNumber: c.ContractNumber,
 		StartDate:      c.StartDate,
 		EndDate:        c.EndDate,
-		ContractValue:  ptrFloat64(c.ContractValue),
+		ContractValue:  c.ContractValue,
 		RenewalStatus:  model.RenewalStatus(c.RenewalStatus),
 		CreatedAt:      c.CreatedAt,
 		UpdatedAt:      c.UpdatedAt,
@@ -107,12 +99,12 @@ func mapVendorToGraphQL(v *vendor.Vendor) *model.Vendor {
 		Code:                  v.Code,
 		Name:                  v.Name,
 		Category:              v.Category,
-		ContactPerson:         strPtrIfNotEmpty(v.ContactPerson),
-		ContactEmail:          strPtrIfNotEmpty(v.ContactEmail),
-		Country:               strPtrIfNotEmpty(v.Country),
+		ContactPerson:         ptr.StrIfNotEmpty(v.ContactPerson),
+		ContactEmail:          ptr.StrIfNotEmpty(v.ContactEmail),
+		Country:               ptr.StrIfNotEmpty(v.Country),
 		RiskLevel:             model.RiskLevel(v.RiskLevel),
 		Status:                model.VendorStatus(v.Status),
-		AssignedDeptManagerID: uuidPtrToStrPtr(v.AssignedDeptManagerID),
+		AssignedDeptManagerID: ptr.UUIDStr(v.AssignedDeptManagerID),
 		CreatedBy:             v.CreatedBy.String(),
 		CreatedAt:             v.CreatedAt,
 		UpdatedAt:             v.UpdatedAt,
@@ -137,9 +129,9 @@ func mapRiskAssessmentToGraphQL(r *risk_assessment.RiskAssessment) *model.RiskAs
 		ID:                   r.ID.String(),
 		Code:                 r.Code,
 		VendorID:             r.VendorID.String(),
-		VendorCode:           strPtrIfNotEmpty(r.VendorCode),
+		VendorCode:           ptr.StrIfNotEmpty(r.VendorCode),
 		AssessmentDate:       r.AssessmentDate,
-		AssessorID:           uuidPtrToStrPtr(r.AssessorID),
+		AssessorID:           ptr.UUIDStr(r.AssessorID),
 		OverallRiskScore:     r.OverallRiskScore,
 		RiskLevel:            model.RiskLevel(r.RiskLevel),
 		SecurityRiskScore:    r.SecurityRiskScore,
@@ -147,32 +139,8 @@ func mapRiskAssessmentToGraphQL(r *risk_assessment.RiskAssessment) *model.RiskAs
 		OperationalRiskScore: r.OperationalRiskScore,
 		LegalRiskScore:       r.LegalRiskScore,
 		Status:               model.AssessmentStatus(r.Status),
-		Notes:                strPtrIfNotEmpty(r.Notes),
+		Notes:                ptr.StrIfNotEmpty(r.Notes),
 		CreatedAt:            r.CreatedAt,
 		UpdatedAt:            r.UpdatedAt,
 	}
-}
-
-// derefString safely dereferences a *string, returning empty string if nil
-func derefString(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func GetRawToken(ctx context.Context) (string, bool) {
-	return graphqlmiddleware.GetRawToken(ctx)
-}
-
-func getDepartmentManagerID(ctx context.Context) *uuid.UUID {
-	claims, err := GetClaims(ctx)
-	if err != nil || claims.Role != "department_manager" {
-		return nil
-	}
-	uid, err := uuid.Parse(claims.UserID)
-	if err != nil {
-		return nil
-	}
-	return &uid
 }

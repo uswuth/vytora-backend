@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/common/ptr"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
 	"github.com/uswuth/vytora-backend/internal/graphql/model"
 )
@@ -38,9 +39,9 @@ func (r *mutationResolver) CreateVendor(ctx context.Context, input model.CreateV
 		Code:          code,
 		Name:          input.Name,
 		Category:      input.Category,
-		ContactPerson: derefString(input.ContactPerson),
-		ContactEmail:  derefString(input.ContactEmail),
-		Country:       derefString(input.Country),
+		ContactPerson: ptr.StrVal(input.ContactPerson),
+		ContactEmail:  ptr.StrVal(input.ContactEmail),
+		Country:       ptr.StrVal(input.Country),
 		RiskLevel:     string(input.RiskLevel),
 		Status:        "Draft",
 		CreatedBy:     createdBy,
@@ -74,9 +75,9 @@ func (r *mutationResolver) UpdateVendor(ctx context.Context, code string, input 
 
 	existing.Name = input.Name
 	existing.Category = input.Category
-	existing.ContactPerson = derefString(input.ContactPerson)
-	existing.ContactEmail = derefString(input.ContactEmail)
-	existing.Country = derefString(input.Country)
+	existing.ContactPerson = ptr.StrVal(input.ContactPerson)
+	existing.ContactEmail = ptr.StrVal(input.ContactEmail)
+	existing.Country = ptr.StrVal(input.Country)
 	existing.RiskLevel = string(input.RiskLevel)
 	existing.Status = string(input.Status)
 

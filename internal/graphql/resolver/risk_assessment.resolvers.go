@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/common/ptr"
 	"github.com/uswuth/vytora-backend/internal/entity/risk_assessment"
 	"github.com/uswuth/vytora-backend/internal/graphql/model"
 )
@@ -41,7 +42,7 @@ func (r *mutationResolver) CreateRiskAssessment(ctx context.Context, input model
 		OperationalRiskScore: input.OperationalRiskScore,
 		LegalRiskScore:       input.LegalRiskScore,
 		Status:               "Draft",
-		Notes:                derefString(input.Notes),
+		Notes:                ptr.StrVal(input.Notes),
 	}
 	if err := r.RiskAssessmentRepo.Create(ctx, ra); err != nil {
 		return nil, err
@@ -67,7 +68,7 @@ func (r *mutationResolver) UpdateRiskAssessment(ctx context.Context, code string
 	ra.OperationalRiskScore = input.OperationalRiskScore
 	ra.LegalRiskScore = input.LegalRiskScore
 	ra.Status = string(input.Status)
-	ra.Notes = derefString(input.Notes)
+	ra.Notes = ptr.StrVal(input.Notes)
 
 	if err := r.RiskAssessmentRepo.Update(ctx, ra); err != nil {
 		return nil, err

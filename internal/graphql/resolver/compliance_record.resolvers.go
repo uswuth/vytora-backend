@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/common/ptr"
 	"github.com/uswuth/vytora-backend/internal/entity/compliance_record"
 	"github.com/uswuth/vytora-backend/internal/graphql/model"
 )
@@ -32,8 +33,8 @@ func (r *mutationResolver) CreateComplianceRecord(ctx context.Context, input mod
 		VendorCode:        v.Code,
 		CertificationType: string(input.CertificationType),
 		Status:            "Pending",
-		IssuedBy:          derefString(input.IssuedBy),
-		EvidenceURL:       derefString(input.EvidenceURL),
+		IssuedBy:          ptr.StrVal(input.IssuedBy),
+		EvidenceURL:       ptr.StrVal(input.EvidenceURL),
 		ReviewedBy:        &reviewedBy,
 	}
 	if input.ValidFrom != nil {
@@ -60,8 +61,8 @@ func (r *mutationResolver) UpdateComplianceRecord(ctx context.Context, code stri
 
 	cr.CertificationType = string(input.CertificationType)
 	cr.Status = string(input.Status)
-	cr.IssuedBy = derefString(input.IssuedBy)
-	cr.EvidenceURL = derefString(input.EvidenceURL)
+	cr.IssuedBy = ptr.StrVal(input.IssuedBy)
+	cr.EvidenceURL = ptr.StrVal(input.EvidenceURL)
 	cr.ReviewedBy = &reviewedBy
 	if input.ValidFrom != nil {
 		cr.ValidFrom = input.ValidFrom

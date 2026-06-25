@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/uswuth/vytora-backend/internal/common/ptr"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor_contact"
 	"github.com/uswuth/vytora-backend/internal/graphql/model"
 )
@@ -33,8 +34,8 @@ func (r *mutationResolver) CreateContact(ctx context.Context, vendorCode string,
 		Code:     code,
 		VendorID: v.ID,
 		Name:     input.Name,
-		Email:    derefString(input.Email),
-		Phone:    derefString(input.Phone),
+		Email:    ptr.StrVal(input.Email),
+		Phone:    ptr.StrVal(input.Phone),
 	}
 
 	if err := r.ContactRepo.Create(ctx, contact); err != nil {
@@ -46,8 +47,8 @@ func (r *mutationResolver) CreateContact(ctx context.Context, vendorCode string,
 		Code:      contact.Code,
 		VendorID:  contact.VendorID.String(),
 		Name:      contact.Name,
-		Email:     strPtrIfNotEmpty(contact.Email),
-		Phone:     strPtrIfNotEmpty(contact.Phone),
+		Email:     ptr.StrIfNotEmpty(contact.Email),
+		Phone:     ptr.StrIfNotEmpty(contact.Phone),
 		CreatedAt: contact.CreatedAt,
 	}, nil
 }
@@ -68,8 +69,8 @@ func (r *mutationResolver) UpdateContact(ctx context.Context, id string, input m
 	}
 
 	contact.Name = input.Name
-	contact.Email = derefString(input.Email)
-	contact.Phone = derefString(input.Phone)
+	contact.Email = ptr.StrVal(input.Email)
+	contact.Phone = ptr.StrVal(input.Phone)
 
 	if err := r.ContactRepo.Update(ctx, contact); err != nil {
 		return nil, err
@@ -80,8 +81,8 @@ func (r *mutationResolver) UpdateContact(ctx context.Context, id string, input m
 		Code:      contact.Code,
 		VendorID:  contact.VendorID.String(),
 		Name:      contact.Name,
-		Email:     strPtrIfNotEmpty(contact.Email),
-		Phone:     strPtrIfNotEmpty(contact.Phone),
+		Email:     ptr.StrIfNotEmpty(contact.Email),
+		Phone:     ptr.StrIfNotEmpty(contact.Phone),
 		CreatedAt: contact.CreatedAt,
 	}, nil
 }
