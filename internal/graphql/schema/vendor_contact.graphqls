@@ -1,0 +1,27 @@
+type VendorContact {
+  id: ID!
+  code: String!
+  vendorId: ID!
+  name: String!
+  email: String
+  phone: String
+  createdAt: DateTime!
+}
+
+input CreateContactInput {
+  name: String!
+  email: String
+  phone: String
+}
+
+input UpdateContactInput {
+  name: String!
+  email: String
+  phone: String
+}
+
+extend type Mutation {
+  createContact(vendorCode: String!, input: CreateContactInput!): VendorContact! @hasPermission(permission: "canEditVendor")
+  updateContact(id: ID!, input: UpdateContactInput!): VendorContact! @hasPermission(permission: "canEditVendor")
+  deleteContact(id: ID!): Boolean! @hasPermission(permission: "canEditVendor")
+}

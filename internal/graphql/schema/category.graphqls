@@ -1,0 +1,47 @@
+type Category {
+  id: ID!
+  code: String!
+  name: String!
+  displayName: String!
+  description: String
+  status: CategoryStatus!
+  createdBy: ID
+  updatedBy: ID
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+enum CategoryStatus {
+  Draft
+  Active
+  Inactive
+}
+
+input CreateCategoryInput {
+  name: String!
+  displayName: String!
+  description: String
+  status: CategoryStatus!
+}
+
+input UpdateCategoryInput {
+  displayName: String!
+  description: String
+  status: CategoryStatus!
+}
+
+extend type Query {
+  categories(search: String, status: CategoryStatus, limit: Int=50, offset: Int=0): CategoryList! @isAuthenticated
+  category(code: String!): Category @isAuthenticated
+}
+
+type CategoryList {
+  data: [Category!]!
+  total: Int!
+}
+
+extend type Mutation {
+  createCategory(input: CreateCategoryInput!): Category! @hasPermission(permission: "canManageCategories")
+  updateCategory(code: String!, input: UpdateCategoryInput!): Category! @hasPermission(permission: "canManageCategories")
+  deleteCategory(code: String!): Boolean! @hasPermission(permission: "canManageCategories")
+}

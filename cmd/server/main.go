@@ -1,13 +1,20 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/rs/zerolog"
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+
 	"github.com/uswuth/vytora-backend/internal/config"
 	"github.com/uswuth/vytora-backend/internal/database"
 	"github.com/uswuth/vytora-backend/internal/entity/audit_trail"
@@ -18,21 +25,37 @@ import (
 	"github.com/uswuth/vytora-backend/internal/entity/risk_assessment"
 	"github.com/uswuth/vytora-backend/internal/entity/user"
 	"github.com/uswuth/vytora-backend/internal/entity/vendor"
-	"github.com/uswuth/vytora-backend/internal/handlers"
-	"github.com/uswuth/vytora-backend/internal/middleware"
+	"github.com/uswuth/vytora-backend/internal/entity/vendor_contact"
+
+	"github.com/uswuth/vytora-backend/internal/graphql/directives"
+	"github.com/uswuth/vytora-backend/internal/graphql/generated"
+	"github.com/uswuth/vytora-backend/internal/graphql/resolver"
+	graphqlmiddleware "github.com/uswuth/vytora-backend/internal/middleware/graphql"
+	"github.com/uswuth/vytora-backend/internal/logger"
 	"github.com/uswuth/vytora-backend/internal/services"
+	startup "github.com/uswuth/vytora-backend/internal/startup"
 )
 
 func main() {
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	startTime := time.Now()
 
-	cfg := config.Load()
+	cfg, err := config.LoadWithDefaults()
+	if err != nil {
+		startup.ShowConfigError("config", err)
+	}
 
 	if err := database.Connect(cfg.DatabaseURL); err != nil {
-		logger.Fatal().Err(err).Msg("Database connection failed")
+		startup.ShowConfigError("db", err)
 	}
 	defer database.Close()
 
+	var dbPoolStats string
+	if database.Pool != nil {
+		st := database.Pool.Stat()
+		dbPoolStats = fmt.Sprintf("acquired=%d, idle=%d, total=%d", st.AcquiredConns(), st.IdleConns(), st.TotalConns())
+	}
+
+	// Repositories
 	userRepo := user.NewRepository(database.Pool)
 	vendorRepo := vendor.NewRepository(database.Pool)
 	riskAssessmentRepo := risk_assessment.NewRepository(database.Pool)
@@ -41,157 +64,139 @@ func main() {
 	auditRepo := audit_trail.NewRepository(database.Pool)
 	reportRepo := report.NewRepository(database.Pool)
 	categoryRepo := category.NewRepository(database.Pool)
+	contactRepo := vendor_contact.NewRepository(database.Pool)
 
+	// Services
 	jwtService := services.NewJWTService(cfg.JWTSecret, cfg.JWTExpiryHours)
-	secretPrefix := cfg.JWTSecret
-	if len(secretPrefix) > 8 {
-		secretPrefix = secretPrefix[:8]
-	}
-	logger.Info().Str("jwt_secret_prefix", secretPrefix).Msg("JWT secret loaded")
 	seqService := services.NewSequenceService(database.Pool)
+	auditLogger := audit_trail.NewLogger(auditRepo, seqService.NextCode)
 
-	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
-	userManagementHandler := user.NewHandler(userRepo, seqService.NextCode)
-	vendorHandler := vendor.NewHandler(vendorRepo, categoryRepo, seqService.NextCode)
-	riskAssessmentHandler := risk_assessment.NewHandler(riskAssessmentRepo, vendorRepo, seqService.NextCode)
-	compHandler := compliance_record.NewHandler(compRepo, vendorRepo, seqService.NextCode)
-	contractHandler := contract.NewHandler(contractRepo, vendorRepo, seqService.NextCode)
-	workflowHandler := vendor.NewWorkflowHandler(vendorRepo, auditRepo, seqService.NextCode)
-	auditHandler := audit_trail.NewHandler(auditRepo)
-	reportHandler := report.NewHandler(reportRepo)
-	categoryHandler := category.NewHandler(categoryRepo, seqService.NextCode)
+	// Root resolver
+	res := &resolver.Resolver{
+		UserRepo:            userRepo,
+		VendorRepo:          vendorRepo,
+		RiskAssessmentRepo:  riskAssessmentRepo,
+		ComplianceRepo:      compRepo,
+		ContractRepo:        contractRepo,
+		AuditRepo:           auditRepo,
+		ReportRepo:          reportRepo,
+		CategoryRepo:        categoryRepo,
+		ContactRepo:         contactRepo,
+		JWTService:          jwtService,
+		SeqService:          seqService,
+		AuditLogger:         auditLogger,
+	}
 
-	app := fiber.New()
+	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{
+		Resolvers: res,
+		Directives: generated.DirectiveRoot{
+			IsAuthenticated: directives.IsAuthenticated,
+			HasPermission:   directives.HasPermission,
+		},
+	}))
 
-	// Global middleware
-	app.Use(middleware.RequestIDMiddleware)
-	app.Use(middleware.StructuredLogger(logger))
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:     strings.Join(cfg.AllowedOrigins, ","),
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders:     "Accept,Authorization,Content-Type",
+	// HTTP router with production middleware stack
+	r := chi.NewRouter()
+
+	// Middleware: order matters — outer runs first
+	r.Use(chimiddleware.RequestID)        // Unique request ID per request
+	r.Use(logger.RequestLogger)           // Custom colored request logging
+	r.Use(chimiddleware.Recoverer)        // Panic recovery — prevents crashes
+	r.Use(chimiddleware.Timeout(30 * time.Second)) // Request timeout — prevents hanging
+	r.Use(chimiddleware.Compress(5, "text/plain", "application/json", "application/graphql+json")) // Gzip compression
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.AllowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+	r.Use(graphqlmiddleware.RateLimiter(cfg.RateLimitRequests, cfg.RateLimitInterval))
+	r.Use(graphqlmiddleware.MetricsMiddleware)
 
-	// Rate limiter: 100 requests per minute
-	limiter := middleware.NewRateLimiter(100, time.Minute)
-	app.Use(limiter.Middleware)
+	// Health & metrics
+	r.Get("/healthz", graphqlmiddleware.HealthCheckHandler(cfg.HealthAllowedIPs))
+	r.Get("/readyz", graphqlmiddleware.ReadinessHandler(cfg.HealthAllowedIPs, database.Pool))
+	r.Get("/metrics", graphqlmiddleware.MetricsHandler())
 
-	// Prometheus metrics middleware
-	app.Use(middleware.MetricsMiddleware)
+	// GraphQL endpoint: enforce POST with a clearer 405 for other methods
+	r.Handle("/graphql", methodNotAllowedHint(bodySizeLimit(cfg.MaxBodySize)(graphqlmiddleware.AuthMiddleware(jwtService)(srv))))
+	r.Get("/", playground.Handler("GraphQL playground", "/graphql"))
+	r.Get("/playground", playground.Handler("GraphQL playground", "/graphql"))
 
-	// Health checks
-	healthChecker := middleware.NewHealthChecker(logger, cfg.HealthAllowedIPs)
-	healthChecker.RegisterRoutes(app)
+	// HTTP server
+	addr := fmt.Sprintf("0.0.0.0:%s", cfg.Port)
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
 
-	// Prometheus metrics endpoint
-	app.Get("/metrics", middleware.MetricsHandler())
+	// Show beautiful startup display
+	envMode := "development"
 
-	// Public routes
-	app.Post("/api/v1/login", authHandler.Login)
-
-	// Protected auth routes
-	authGroup := app.Group("/api/v1/auth")
-	authGroup.Use(middleware.AuthMiddleware(jwtService))
-	authGroup.Post("/extend", authHandler.ExtendSession)
-
-	// User management (admin only)
-	userGroup := app.Group("/api/v1/users")
-	userGroup.Use(middleware.AuthMiddleware(jwtService))
-	userGroup.Use(middleware.RequirePermission("canManageUsers"))
-	userGroup.Post("", userManagementHandler.Create)
-	userGroup.Get("", userManagementHandler.List)
-	userGroup.Get("/:id", userManagementHandler.Get)
-	userGroup.Put("/:id/role", userManagementHandler.UpdateRole)
-	userGroup.Put("/:id/deactivate", userManagementHandler.Deactivate)
-	userGroup.Put("/:id/activate", userManagementHandler.Activate)
-
-	// Protected routes
-	protected := app.Group("/api/v1")
-	protected.Use(middleware.AuthMiddleware(jwtService))
-
-	protected.Get("/me", func(c *fiber.Ctx) error {
-		claims := c.Locals(middleware.UserContextKey).(*services.Claims)
-		return c.JSON(fiber.Map{
-			"user_id": claims.UserID,
-			"code":    claims.Code,
-			"email":   claims.Email,
-			"role":    claims.Role,
-		})
+	dbLabel := cfg.ConnectionName
+	if dbLabel == "" {
+		dbLabel = cfg.DBName
+	}
+	startup.ShowStartup(&startup.StartupDisplay{
+		AppName:     "graphql-api",
+		Version:     "1.0.0",
+		Env:         envMode,
+		Config: map[string]string{
+			"config": ".env loaded",
+		},
+		DB:          dbLabel + " connected (" + cfg.DBName + ")",
+		DBPoolStats: dbPoolStats,
+		Server:      addr,
+		Endpoints: []startup.Endpoint{
+			{Name: "graphql", URL: "http://localhost:" + cfg.Port + "/graphql"},
+			{Name: "playground", URL: "http://localhost:" + cfg.Port + "/playground"},
+		},
+		StartTime: startTime,
 	})
 
-	// Vendor routes
-	protected.Post("/vendors", vendorHandler.Create, middleware.RequirePermission("canCreateVendor"))
+	// Graceful shutdown — wait for SIGINT/SIGTERM
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Fprintf(os.Stderr, "server start failed: %v\n", err)
+			os.Exit(1)
+		}
+	}()
 
-	vendorEditGroup := protected.Group("/vendors", middleware.RequirePermission("canEditVendor"))
-	vendorEditGroup.Get("", vendorHandler.List)
-	vendorEditGroup.Get("/:code", vendorHandler.Get)
-	vendorEditGroup.Put("/:code", vendorHandler.Update)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
 
-	vendorDeleteGroup := protected.Group("/vendors", middleware.RequirePermission("canDeleteVendor"))
-	vendorDeleteGroup.Delete("/:code", vendorHandler.Delete)
+	startup.Shutdown()
 
-	// Workflow
-	protected.Put("/vendors/:code/submit", workflowHandler.Submit, middleware.RequirePermission("canSubmitVendorRequest"))
-	protected.Put("/vendors/:code/review-risk", workflowHandler.ReviewRisk, middleware.RequirePermission("canReviewRisk"))
-	protected.Put("/vendors/:code/review-compliance", workflowHandler.ReviewCompliance, middleware.RequirePermission("canReviewCompliance"))
-	protected.Put("/vendors/:code/approve", workflowHandler.Approve, middleware.RequirePermission("canEditVendor"))
-	protected.Put("/vendors/:code/reject", workflowHandler.Reject, middleware.RequirePermission("canEditVendor"))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	// Risk assessments
-	protected.Post("/risk-assessments", riskAssessmentHandler.Create, middleware.RequirePermission("canCreateRiskAssessment"))
+	if err := httpServer.Shutdown(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Server forced to shutdown: %v\n", err)
+		os.Exit(1)
+	}
+}
 
-	riskReviewGroup := protected.Group("/risk-assessments", middleware.RequirePermission("canReviewRisk"))
-	riskReviewGroup.Get("", riskAssessmentHandler.List)
-	riskReviewGroup.Get("/:code", riskAssessmentHandler.Get)
+func methodNotAllowedHint(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			fmt.Fprintf(w, `{"errors":[{"message":"Method Not Allowed. Use the playground at / or /playground for GraphQL queries."}]}`)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-	riskManageGroup := protected.Group("/risk-assessments", middleware.RequirePermission("canReviewRisk"))
-	riskManageGroup.Put("/:code", riskAssessmentHandler.Update)
-	riskManageGroup.Delete("/:code", riskAssessmentHandler.Delete)
-
-	protected.Put("/risk-assessments/:code/approve", riskAssessmentHandler.Approve, middleware.RequirePermission("canApproveRisk"))
-
-	// Compliance
-	compGroup := protected.Group("/compliance", middleware.RequirePermission("canReviewCompliance"))
-	compGroup.Post("", compHandler.Create)
-	compGroup.Get("", compHandler.List)
-	compGroup.Get("/:code", compHandler.Get)
-	compGroup.Put("/:code", compHandler.Update)
-	compGroup.Delete("/:code", compHandler.Delete)
-	protected.Get("/compliance/expiring", compHandler.Expiring)
-
-	// Contracts
-	contractGroup := protected.Group("/contracts", middleware.RequirePermission("canEditVendor"))
-	contractGroup.Post("", contractHandler.Create)
-	contractGroup.Get("", contractHandler.List)
-	contractGroup.Get("/:code", contractHandler.Get)
-	contractGroup.Put("/:code", contractHandler.Update)
-	contractGroup.Delete("/:code", contractHandler.Delete)
-	protected.Get("/contracts/expiring", contractHandler.Expiring)
-
-	// Audit
-	auditGroup := protected.Group("/audit", middleware.RequirePermission("canViewAuditHistory"))
-	auditGroup.Get("", auditHandler.List)
-
-	// Reports
-	protected.Get("/reports/summary", reportHandler.Summary, middleware.RequirePermission("canAccessAllReports"))
-	protected.Get("/reports/monthly-onboarding", reportHandler.MonthlyOnboarding, middleware.RequirePermission("canAccessAllReports"))
-	protected.Get("/reports/summary-2", reportHandler.Summary, middleware.RequirePermission("canViewAssignedVendors"))
-	protected.Get("/reports/monthly-onboarding-2", reportHandler.MonthlyOnboarding, middleware.RequirePermission("canViewAssignedVendors"))
-
-	// Category routes
-	catManageGroup := protected.Group("/categories", middleware.RequirePermission("canManageCategories"))
-	catManageGroup.Post("", categoryHandler.Create)
-	catManageGroup.Put("/:code", categoryHandler.Update)
-	catManageGroup.Delete("/:code", categoryHandler.Delete)
-
-	catViewGroup := protected.Group("/categories", middleware.RequirePermission("canViewCategories"))
-	catViewGroup.Get("", categoryHandler.List)
-	catViewGroup.Get("/:code", categoryHandler.Get)
-
-	logger.Info().Msg("VRMP server starting on http://localhost:8080")
-	if err := app.Listen(":8080"); err != nil {
-		logger.Fatal().Err(err).Msg("server start failed")
+// bodySizeLimit rejects requests with bodies larger than maxBytes.
+// Uses http.MaxBytesReader which returns a 413 Payload Too Large if the body exceeds the limit.
+func bodySizeLimit(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			next.ServeHTTP(w, r)
+		})
 	}
 }

@@ -7,8 +7,8 @@ How to run the backend, where to start with the frontend, and phased delivery pl
 ## Part 1: Backend — How to Use
 
 ### Prerequisites
-- Go 1.24+
-- PostgreSQL 14+
+- Go 1.24
+- PostgreSQL 16
 - curl or Postman for testing
 
 ### Step 1: Configuration

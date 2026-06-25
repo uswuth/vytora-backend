@@ -1,0 +1,49 @@
+type Contract {
+  id: ID!
+  code: String!
+  vendorId: ID!
+  vendorCode: String
+  contractNumber: String!
+  startDate: DateTime!
+  endDate: DateTime!
+  contractValue: Float
+  renewalStatus: RenewalStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+enum RenewalStatus {
+  Auto_Renew
+  Manual
+  Expiring
+}
+
+input CreateContractInput {
+  vendorCode: String!
+  contractNumber: String!
+  startDate: DateTime!
+  endDate: DateTime!
+  contractValue: Float
+  renewalStatus: RenewalStatus!
+}
+
+input UpdateContractInput {
+  vendorCode: String!
+  contractNumber: String!
+  startDate: DateTime!
+  endDate: DateTime!
+  contractValue: Float
+  renewalStatus: RenewalStatus!
+}
+
+extend type Query {
+  contracts(vendorCode: String!): [Contract!]! @isAuthenticated
+  contract(code: String!): Contract @isAuthenticated
+  expiringContracts(days: Int=30): [Contract!]! @isAuthenticated
+}
+
+extend type Mutation {
+  createContract(input: CreateContractInput!): Contract! @hasPermission(permission: "canEditVendor")
+  updateContract(code: String!, input: UpdateContractInput!): Contract! @hasPermission(permission: "canEditVendor")
+  deleteContract(code: String!): Boolean! @hasPermission(permission: "canEditVendor")
+}

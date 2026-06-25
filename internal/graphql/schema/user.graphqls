@@ -1,0 +1,49 @@
+type User {
+  id: ID!
+  code: String!
+  email: String!
+  fullName: String!
+  role: UserRole!
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+enum UserRole {
+  system_admin
+  risk_manager
+  compliance_officer
+  department_manager
+  auditor
+}
+
+input CreateUserInput {
+  email: String!
+  password: String!
+  fullName: String!
+  role: UserRole!
+}
+
+input UpdateRoleInput {
+  role: UserRole!
+}
+
+extend type Query {
+  me: User @isAuthenticated
+  users: [User!]! @hasPermission(permission: "canManageUsers")
+  user(id: ID!): User @hasPermission(permission: "canManageUsers")
+}
+
+extend type Mutation {
+  login(email: String!, password: String!): LoginResponse!
+  extendSession: LoginResponse! @isAuthenticated
+  createUser(input: CreateUserInput!): User! @hasPermission(permission: "canManageUsers")
+  updateUserRole(id: ID!, input: UpdateRoleInput!): Boolean! @hasPermission(permission: "canManageUsers")
+  deactivateUser(id: ID!): Boolean! @hasPermission(permission: "canManageUsers")
+  activateUser(id: ID!): Boolean! @hasPermission(permission: "canManageUsers")
+}
+
+type LoginResponse {
+  token: String!
+  user: User!
+}

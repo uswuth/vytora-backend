@@ -23,10 +23,10 @@ var DigitsMap = map[string]int{
 	"user":              3, // USR001–USR999
 	"vendor":            3, // VEN001–VEN999
 	"vendor_contact":    4, // VCN0001–VCN9999
-	"risk_assessment":   5, // RAK00001–RAK99999
-	"compliance_record": 5, // CMP00001–CMP99999
-	"contract":          5, // CTR00001–CTR99999
-	"audit_trail":       6, // AUD000001–AUD999999
+	"risk_assessment":   4, // RAK00001–RAK9999
+	"compliance_record": 4, // CMP00001–CMP9999
+	"contract":          4, // CTR00001–CTR9999
+	"audit_trail":       5, // AUD000001–AUD99999
 	"category":          3, // CAT001–CAT999
 }
 

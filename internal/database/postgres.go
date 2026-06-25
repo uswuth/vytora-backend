@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,13 +18,11 @@ func Connect(databaseURL string) error {
 		return fmt.Errorf("unable to ping database: %w", err)
 	}
 	Pool = pool
-	log.Println("Connected to PostgreSQL Database")
 	return nil
 }
 
 func Close() {
 	if Pool != nil {
 		Pool.Close()
-		log.Println("Database connection pool closed")
 	}
 }

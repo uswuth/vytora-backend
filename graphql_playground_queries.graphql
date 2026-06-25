@@ -1,0 +1,917 @@
+# ============================================
+# VYTORA BACKEND - GraphQL Playground Queries
+# Open http://localhost:8080/ in your browser
+# ============================================
+#
+# HOW TO USE:
+# 1. Paste a query/mutation in the top "Query" panel
+# 2. Paste its variables (if any) in the bottom-left "Variables" panel
+# 3. Click the ▶ Play button
+#
+# QUICK START - Login:
+# ┌─ Query (top panel) ─────────────────────────────────────────┐
+# │ mutation Login($email: String!, $password: String!) {       │
+# │   login(email: $email, password: $password) {              │
+# │     token                                                   │
+# │     user {                                                  │
+# │       id                                                    │
+# │       email                                                 │
+# │       fullName                                              │
+# │       role                                                  │
+# │     }                                                       │
+# │   }                                                         │
+# │ }                                                           │
+# └─────────────────────────────────────────────────────────────┘
+# ┌─ Variables (bottom-left panel) ─────────────────────────────┐
+# │ {                                                           │
+# │   "email": "admin@vytora.com",                             │
+# │   "password": "your_password_here"                          │
+# │ }                                                           │
+# └─────────────────────────────────────────────────────────────┘
+# ============================================
+
+# -------------------------------------------------
+# AUTH
+# -------------------------------------------------
+
+mutation Login($email: String!, $password: String!) {
+  login(email: $email, password: $password) {
+    token
+    user {
+      id
+      email
+      fullName
+      role
+    }
+  }
+}
+# variable 
+
+{
+  "email": "admin@vrmp.com",
+  "password": "admin123"
+}
+
+mutation ExtendSession {
+  extendSession {
+    token
+    user {
+      id
+      email
+      fullName
+      role
+    }
+  }
+}
+
+query Me {
+  me {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+    createdAt
+    updatedAt
+  }
+}
+
+# header
+
+{"Authorization":"Bearer <token>"}
+
+
+# -------------------------------------------------
+# USERS
+# -------------------------------------------------
+
+query Users {
+  users {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+    createdAt
+    updatedAt
+  }
+}
+
+query User($id: ID!) {
+  user(id: $id) {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+    createdAt
+    updatedAt
+  }
+}
+
+mutation CreateUser($input: CreateUserInput!) {
+  createUser(input: $input) {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+    createdAt
+    updatedAt
+  }
+}
+
+mutation UpdateUserRole($id: ID!, $input: UpdateRoleInput!) {
+  updateUserRole(id: $id, input: $input)
+}
+
+mutation DeactivateUser($id: ID!) {
+  deactivateUser(id: $id)
+}
+
+mutation ActivateUser($id: ID!) {
+  activateUser(id: $id)
+}
+
+# -------------------------------------------------
+# CATEGORIES
+# -------------------------------------------------
+
+query Categories($search: String, $status: CategoryStatus, $limit: Int, $offset: Int) {
+  categories(search: $search, status: $status, limit: $limit, offset: $offset) {
+    data {
+      id
+      code
+      name
+      displayName
+      description
+      status
+      createdBy
+      updatedBy
+      createdAt
+      updatedAt
+    }
+    total
+  }
+}
+
+query Category($code: String!) {
+  category(code: $code) {
+    id
+    code
+    name
+    displayName
+    description
+    status
+    createdBy
+    updatedBy
+    createdAt
+    updatedAt
+  }
+}
+
+mutation CreateCategory($input: CreateCategoryInput!) {
+  createCategory(input: $input) {
+    id
+    code
+    name
+    displayName
+    description
+    status
+    createdBy
+    updatedBy
+    createdAt
+    updatedAt
+  }
+}
+
+mutation UpdateCategory($code: String!, $input: UpdateCategoryInput!) {
+  updateCategory(code: $code, input: $input) {
+    id
+    code
+    name
+    displayName
+    description
+    status
+    updatedAt
+  }
+}
+
+mutation DeleteCategory($code: String!) {
+  deleteCategory(code: $code)
+}
+
+# -------------------------------------------------
+# VENDORS
+# -------------------------------------------------
+
+query Vendors(
+  $filter: VendorListFilter
+  $limit: Int
+  $offset: Int
+  $sortBy: String
+  $sortOrder: String
+) {
+  vendors(
+    filter: $filter
+    limit: $limit
+    offset: $offset
+    sortBy: $sortBy
+    sortOrder: $sortOrder
+  ) {
+    data {
+      id
+      code
+      name
+      category
+      contactPerson
+      contactEmail
+      country
+      riskLevel
+      status
+      assignedDeptManagerID
+      createdBy
+      createdAt
+      updatedAt
+      contacts {
+        id
+        code
+        name
+        email
+        phone
+        createdAt
+      }
+      riskAssessments {
+        id
+        code
+        assessmentDate
+        overallRiskScore
+        riskLevel
+        status
+      }
+      complianceRecords {
+        id
+        code
+        certificationType
+        status
+        validFrom
+        validUntil
+      }
+      contracts {
+        id
+        code
+        contractNumber
+        startDate
+        endDate
+        contractValue
+        renewalStatus
+      }
+    }
+    total
+  }
+}
+
+query Vendor($code: String!) {
+  vendor(code: $code) {
+    id
+    code
+    name
+    category
+    contactPerson
+    contactEmail
+    country
+    riskLevel
+    status
+    assignedDeptManagerID
+    createdBy
+    createdAt
+    updatedAt
+    contacts {
+      id
+      code
+      name
+      email
+      phone
+      createdAt
+    }
+    riskAssessments {
+      id
+      code
+      assessmentDate
+      overallRiskScore
+      riskLevel
+      status
+    }
+    complianceRecords {
+      id
+      code
+      certificationType
+      status
+      validFrom
+      validUntil
+    }
+    contracts {
+      id
+      code
+      contractNumber
+      startDate
+      endDate
+      contractValue
+      renewalStatus
+    }
+  }
+}
+
+mutation CreateVendor($input: CreateVendorInput!) {
+  createVendor(input: $input) {
+    id
+    code
+    name
+    category
+    contactPerson
+    contactEmail
+    country
+    riskLevel
+    status
+    createdBy
+    createdAt
+    updatedAt
+  }
+}
+
+mutation UpdateVendor($code: String!, $input: UpdateVendorInput!) {
+  updateVendor(code: $code, input: $input) {
+    id
+    code
+    name
+    category
+    contactPerson
+    contactEmail
+    country
+    riskLevel
+    status
+    updatedAt
+  }
+}
+
+mutation DeleteVendor($code: String!) {
+  deleteVendor(code: $code)
+}
+
+mutation SubmitVendor($code: String!) {
+  submitVendor(code: $code)
+}
+
+mutation ReviewVendorRisk($code: String!) {
+  reviewVendorRisk(code: $code)
+}
+
+mutation ReviewVendorCompliance($code: String!) {
+  reviewVendorCompliance(code: $code)
+}
+
+mutation ApproveVendor($code: String!) {
+  approveVendor(code: $code)
+}
+
+mutation RejectVendor($code: String!) {
+  rejectVendor(code: $code)
+}
+
+# -------------------------------------------------
+# VENDOR CONTACTS
+# -------------------------------------------------
+
+mutation CreateContact($vendorCode: String!, $input: CreateContactInput!) {
+  createContact(vendorCode: $vendorCode, input: $input) {
+    id
+    code
+    vendorId
+    name
+    email
+    phone
+    createdAt
+  }
+}
+
+mutation UpdateContact($id: ID!, $input: UpdateContactInput!) {
+  updateContact(id: $id, input: $input) {
+    id
+    code
+    vendorId
+    name
+    email
+    phone
+    createdAt
+  }
+}
+
+mutation DeleteContact($id: ID!) {
+  deleteContact(id: $id)
+}
+
+# -------------------------------------------------
+# RISK ASSESSMENTS
+# -------------------------------------------------
+
+query RiskAssessments(
+  $vendorCode: String
+  $riskLevel: RiskLevel
+  $status: AssessmentStatus
+  $limit: Int
+  $offset: Int
+) {
+  riskAssessments(
+    vendorCode: $vendorCode
+    riskLevel: $riskLevel
+    status: $status
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    code
+    vendorId
+    vendorCode
+    assessmentDate
+    assessorId
+    overallRiskScore
+    riskLevel
+    securityRiskScore
+    financialRiskScore
+    operationalRiskScore
+    legalRiskScore
+    status
+    notes
+    createdAt
+    updatedAt
+  }
+}
+
+query RiskAssessment($code: String!) {
+  riskAssessment(code: $code) {
+    id
+    code
+    vendorId
+    vendorCode
+    assessmentDate
+    assessorId
+    overallRiskScore
+    riskLevel
+    securityRiskScore
+    financialRiskScore
+    operationalRiskScore
+    legalRiskScore
+    status
+    notes
+    createdAt
+    updatedAt
+  }
+}
+
+mutation CreateRiskAssessment($input: CreateRiskAssessmentInput!) {
+  createRiskAssessment(input: $input) {
+    id
+    code
+    vendorId
+    vendorCode
+    assessmentDate
+    assessorId
+    overallRiskScore
+    riskLevel
+    securityRiskScore
+    financialRiskScore
+    operationalRiskScore
+    legalRiskScore
+    status
+    notes
+    createdAt
+    updatedAt
+  }
+}
+
+mutation UpdateRiskAssessment($code: String!, $input: UpdateRiskAssessmentInput!) {
+  updateRiskAssessment(code: $code, input: $input) {
+    id
+    code
+    vendorId
+    vendorCode
+    assessmentDate
+    assessorId
+    overallRiskScore
+    riskLevel
+    securityRiskScore
+    financialRiskScore
+    operationalRiskScore
+    legalRiskScore
+    status
+    notes
+    updatedAt
+  }
+}
+
+mutation DeleteRiskAssessment($code: String!) {
+  deleteRiskAssessment(code: $code)
+}
+
+mutation ApproveRiskAssessment($code: String!) {
+  approveRiskAssessment(code: $code)
+}
+
+# -------------------------------------------------
+# COMPLIANCE RECORDS
+# -------------------------------------------------
+
+query ComplianceRecords($vendorCode: String!) {
+  complianceRecords(vendorCode: $vendorCode) {
+    id
+    code
+    vendorId
+    vendorCode
+    certificationType
+    status
+    validFrom
+    validUntil
+    issuedBy
+    evidenceUrl
+    reviewedBy
+    createdAt
+    updatedAt
+  }
+}
+
+query ComplianceRecord($code: String!) {
+  complianceRecord(code: $code) {
+    id
+    code
+    vendorId
+    vendorCode
+    certificationType
+    status
+    validFrom
+    validUntil
+    issuedBy
+    evidenceUrl
+    reviewedBy
+    createdAt
+    updatedAt
+  }
+}
+
+query ExpiringCompliance($days: Int) {
+  expiringCompliance(days: $days) {
+    id
+    code
+    vendorId
+    vendorCode
+    certificationType
+    status
+    validFrom
+    validUntil
+    issuedBy
+    evidenceUrl
+    reviewedBy
+    createdAt
+    updatedAt
+  }
+}
+
+mutation CreateComplianceRecord($input: CreateComplianceInput!) {
+  createComplianceRecord(input: $input) {
+    id
+    code
+    vendorId
+    vendorCode
+    certificationType
+    status
+    validFrom
+    validUntil
+    issuedBy
+    evidenceUrl
+    reviewedBy
+    createdAt
+    updatedAt
+  }
+}
+
+mutation UpdateComplianceRecord($code: String!, $input: UpdateComplianceInput!) {
+  updateComplianceRecord(code: $code, input: $input) {
+    id
+    code
+    vendorId
+    vendorCode
+    certificationType
+    status
+    validFrom
+    validUntil
+    issuedBy
+    evidenceUrl
+    reviewedBy
+    updatedAt
+  }
+}
+
+mutation DeleteComplianceRecord($code: String!) {
+  deleteComplianceRecord(code: $code)
+}
+
+# -------------------------------------------------
+# CONTRACTS
+# -------------------------------------------------
+
+query Contracts($vendorCode: String!) {
+  contracts(vendorCode: $vendorCode) {
+    id
+    code
+    vendorId
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+    createdAt
+    updatedAt
+  }
+}
+
+query Contract($code: String!) {
+  contract(code: $code) {
+    id
+    code
+    vendorId
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+    createdAt
+    updatedAt
+  }
+}
+
+query ExpiringContracts($days: Int) {
+  expiringContracts(days: $days) {
+    id
+    code
+    vendorId
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+    createdAt
+    updatedAt
+  }
+}
+
+mutation CreateContract($input: CreateContractInput!) {
+  createContract(input: $input) {
+    id
+    code
+    vendorId
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+    createdAt
+    updatedAt
+  }
+}
+
+mutation UpdateContract($code: String!, $input: UpdateContractInput!) {
+  updateContract(code: $code, input: $input) {
+    id
+    code
+    vendorId
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+    updatedAt
+  }
+}
+
+mutation DeleteContract($code: String!) {
+  deleteContract(code: $code)
+}
+
+# -------------------------------------------------
+# AUDIT TRAIL
+# -------------------------------------------------
+
+query AuditTrails(
+  $tableName: String
+  $recordCode: String
+  $action: String
+  $changedBy: String
+  $dateFrom: String
+  $dateTo: String
+  $limit: Int
+  $offset: Int
+) {
+  auditTrails(
+    tableName: $tableName
+    recordCode: $recordCode
+    action: $action
+    changedBy: $changedBy
+    dateFrom: $dateFrom
+    dateTo: $dateTo
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    code
+    tableName
+    recordId
+    recordCode
+    action
+    fieldName
+    oldValue
+    newValue
+    changedBy
+    changedAt
+  }
+}
+
+# -------------------------------------------------
+# REPORTS
+# -------------------------------------------------
+
+query SummaryReport {
+  summaryReport {
+    totalVendors
+    vendorsByStatus {
+      key
+      value
+    }
+    vendorsByRiskLevel {
+      key
+      value
+    }
+    expiringContracts30
+    expiringContracts60
+    expiringContracts90
+    expiringCompliance30
+    expiringCompliance60
+    expiringCompliance90
+    pendingRiskAssessments
+    approvedRiskAssessments
+  }
+}
+
+query MonthlyOnboarding {
+  monthlyOnboarding {
+    month
+    count
+  }
+}
+
+query HighRiskVendors {
+  highRiskVendors {
+    code
+    name
+    category
+    riskLevel
+    overallRiskScore
+    latestAssessment
+    assessmentStatus
+    expiringContracts30
+  }
+}
+
+query ExpiringContractsReport {
+  expiringContractsReport {
+    code
+    vendorName
+    vendorCode
+    contractNumber
+    endDate
+    daysRemaining
+    renewalStatus
+    contractValue
+  }
+}
+
+query ComplianceSummaryReport {
+  complianceSummaryReport {
+    certificationType
+    approved
+    pending
+    expired
+    total
+  }
+}
+
+query TimeSeriesReport {
+  timeSeriesReport {
+    vendors {
+      date
+      count
+    }
+    riskAssessments {
+      date
+      count
+    }
+    compliance {
+      date
+      count
+    }
+  }
+}
+
+# ============================================
+# EXAMPLE VARIABLES (copy into the Variables panel)
+# ============================================
+
+# --- Login ---
+# {
+#   "email": "admin@vytora.com",
+#   "password": "your_password"
+# }
+
+# --- CreateVendor ---
+# {
+#   "input": {
+#     "name": "Acme Corp",
+#     "category": "Technology",
+#     "contactPerson": "John Doe",
+#     "contactEmail": "john@acme.com",
+#     "country": "USA",
+#     "riskLevel": "Medium"
+#   }
+# }
+
+# --- CreateRiskAssessment ---
+# {
+#   "input": {
+#     "vendorCode": "VEN-001",
+#     "assessmentDate": "2025-06-21",
+#     "overallRiskScore": 75.5,
+#     "riskLevel": "High",
+#     "securityRiskScore": 80.0,
+#     "financialRiskScore": 70.0,
+#     "operationalRiskScore": 75.0,
+#     "legalRiskScore": 60.0,
+#     "notes": "Strong security posture but financial concerns"
+#   }
+# }
+
+# --- CreateContract ---
+# {
+#   "input": {
+#     "vendorCode": "VEN-001",
+#     "contractNumber": "CNT-2025-001",
+#     "startDate": "2025-01-01",
+#     "endDate": "2025-12-31",
+#     "contractValue": 50000.00,
+#     "renewalStatus": "Manual"
+#   }
+# }
+
+# --- CreateComplianceRecord ---
+# {
+#   "input": {
+#     "vendorCode": "VEN-001",
+#     "certificationType": "ISO27001",
+#     "status": "Pending",
+#     "validFrom": "2025-01-01",
+#     "validUntil": "2025-12-31",
+#     "issuedBy": "ISO Body",
+#     "evidenceUrl": "https://example.com/cert.pdf"
+#   }
+# }
+
+# --- Vendors filter ---
+# {
+#   "filter": {
+#     "search": "acme",
+#     "category": "Technology",
+#     "riskLevel": "High",
+#     "status": "Active"
+#   },
+#   "limit": 10,
+#   "offset": 0,
+#   "sortBy": "created_at",
+#   "sortOrder": "DESC"
+# }
+
+# --- AuditTrails filter ---
+# {
+#   "tableName": "vendors",
+#   "recordCode": "VEN-001",
+#   "action": "UPDATE",
+#   "dateFrom": "2025-01-01",
+#   "dateTo": "2025-12-31",
+#   "limit": 20,
+#   "offset": 0
+# }

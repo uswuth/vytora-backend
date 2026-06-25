@@ -1,313 +1,406 @@
 # API Endpoints
 
-Base URL: `http://localhost:8080`  
+Base URL: `http://localhost:8080`
+
+The backend currently exposes **GraphQL** for app operations, plus **health/metrics** endpoints.
+
+- GraphQL: `POST http://localhost:8080/graphql`
+- Health: `GET http://localhost:8080/healthz`
+- Ready: `GET http://localhost:8080/readyz`
+- Metrics: `GET http://localhost:8080/metrics`
+
 Auth: `Authorization: Bearer <token>`  
 Content-Type: `application/json`
 
 ---
 
-## Auth
+## GraphQL
 
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/login | Public | — |
-| POST | /api/v1/auth/extend | Bearer | — |
+All core operations are served through the single GraphQL endpoint.
 
-### POST /api/v1/login
-**Request**
+| Method | Path | Auth |
+|--------|------|------|
+| POST | /graphql | Bearer |
+
+### Request format
 ```json
-{ "email": "string", "password": "string" }
+{
+  "query": "query ... { ... }",
+  "variables": {}
+}
 ```
-**Response 200**
-```json
-{ "token": "string", "expires_in": 86400, "user": { "id": "uuid", "code": "string", "email": "string", "full_name": "string", "role": "string", "is_active": true, "created_at": "ISO8601", "updated_at": "ISO8601" } }
+
+### Playground
+Open the browser playground at:
+- `http://localhost:8080/`
+- `http://localhost:8080/playground`
+
+---
+
+## Queries
+
+**Me**
+```graphql
+query Me {
+  me {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+    createdAt
+    updatedAt
+  }
+}
 ```
 
-### POST /api/v1/auth/extend
-**Headers:** `Authorization: Bearer <token>`  
-**Request:** empty body  
-**Response 200**
-```json
-{ "token": "string", "expires_in": 86400 }
+**Users**
+```graphql
+query Users {
+  users {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+    createdAt
+    updatedAt
+  }
+}
+```
+
+**User**
+```graphql
+query User($id: ID!) {
+  user(id: $id) {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+  }
+}
+```
+
+**vendors**
+```graphql
+query Vendors($filter: VendorListFilter, $limit: Int, $offset: Int, $sortBy: String, $sortOrder: String) {
+  vendors(filter: $filter, limit: $limit, offset: $offset, sortBy: $sortBy, sortOrder: $sortOrder) {
+    data {
+      id
+      code
+      name
+      status
+      riskLevel
+    }
+    total
+  }
+}
+```
+
+**Vendor**
+```graphql
+query Vendor($code: String!) {
+  vendor(code: $code) {
+    id
+    code
+    name
+    status
+    category
+    email
+    phone
+    address
+    riskLevel
+  }
+}
+```
+
+**Compliance Records**
+```graphql
+query ComplianceRecords($vendorCode: String!) {
+  complianceRecords(vendorCode: $vendorCode) {
+    id
+    code
+    vendorCode
+    certificationType
+    validFrom
+    validUntil
+    issuedBy
+    evidenceUrl
+  }
+}
+```
+
+**Contracts**
+```graphql
+query Contracts($vendorCode: String!) {
+  contracts(vendorCode: $vendorCode) {
+    id
+    code
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+  }
+}
+```
+
+**Risk Assessments**
+```graphql
+query RiskAssessments($vendorCode: String, $riskLevel: RiskLevel, $status: AssessmentStatus, $limit: Int, $offset: Int) {
+  riskAssessments(vendorCode: $vendorCode, riskLevel: $riskLevel, status: $status, limit: $limit, offset: $offset) {
+    id
+    code
+    vendorCode
+    assessmentDate
+    overallRiskScore
+    riskLevel
+    securityRiskScore
+    financialRiskScore
+    operationalRiskScore
+    legalRiskScore
+    status
+    notes
+  }
+}
+```
+
+**Categories**
+```graphql
+query Categories($search: String, $status: String) {
+  categories(search: $search, status: $status) {
+    data {
+      id
+      code
+      name
+      displayName
+      description
+      status
+    }
+    total
+  }
+}
 ```
 
 ---
 
-## Users
+## Mutations
 
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/users | Bearer | canManageUsers |
-| GET | /api/v1/users | Bearer | canManageUsers |
-| GET | /api/v1/users/:id | Bearer | canManageUsers |
-| PUT | /api/v1/users/:id/role | Bearer | canManageUsers |
-| PUT | /api/v1/users/:id/deactivate | Bearer | canManageUsers |
-| PUT | /api/v1/users/:id/activate | Bearer | canManageUsers |
-
-### POST /api/v1/users
-**Request**
-```json
-{ "email": "string", "password": "string", "full_name": "string", "role": "admin|editor|viewer" }
-```
-**Response 201** — User object (no `password_hash`)
-
-### GET /api/v1/users
-**Response 200** — User[]
-
-### GET /api/v1/users/:id
-**Response 200** — User
-
-### PUT /api/v1/users/:id/role
-**Request**
-```json
-{ "role": "string" }
-```
-**Response 204**
-
-### PUT /api/v1/users/:id/deactivate
-**Response 204**
-
-### PUT /api/v1/users/:id/activate
-**Response 204**
-
----
-
-## Vendors
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/vendors | Bearer | canCreateVendor |
-| GET | /api/v1/vendors | Bearer | canEditVendor |
-| GET | /api/v1/vendors/:code | Bearer | canEditVendor |
-| PUT | /api/v1/vendors/:code | Bearer | canEditVendor |
-| DELETE | /api/v1/vendors/:code | Bearer | canDeleteVendor |
-| PUT | /api/v1/vendors/:code/submit | Bearer | canSubmitVendorRequest |
-| PUT | /api/v1/vendors/:code/review-risk | Bearer | canReviewRisk |
-| PUT | /api/v1/vendors/:code/review-compliance | Bearer | canReviewCompliance |
-| PUT | /api/v1/vendors/:code/approve | Bearer | canEditVendor |
-| PUT | /api/v1/vendors/:code/reject | Bearer | canEditVendor |
-
-### POST /api/v1/vendors
-**Request**
-```json
-{ "name": "string", "category": "string", "contact_person": "string?", "contact_email": "string?", "country": "string?", "contract_start_date": "YYYY-MM-DD?", "contract_end_date": "YYYY-MM-DD?", "risk_level": "Low|Medium|High|Critical", "status": "string", "assigned_dept_manager_id": "uuid?" }
-```
-**Response 201** — Vendor object
-
-### GET /api/v1/vendors
-**Response 200** — Vendor[]
-
-### GET /api/v1/vendors/:code
-**Response 200** — Vendor
-
-### PUT /api/v1/vendors/:code
-**Request** — same as Create (all fields required)  
-**Response 200** — Vendor
-
-### DELETE /api/v1/vendors/:code
-**Response 204**
-
-### Workflow endpoints (PUT /api/v1/vendors/:code/*)
-**Request:** empty body  
-**Response 204**
-
----
-
-## Risk Assessments
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/risk-assessments | Bearer | canCreateRiskAssessment |
-| GET | /api/v1/risk-assessments | Bearer | canReviewRisk |
-| GET | /api/v1/risk-assessments/:code | Bearer | canReviewRisk |
-| PUT | /api/v1/risk-assessments/:code | Bearer | canReviewRisk |
-| DELETE | /api/v1/risk-assessments/:code | Bearer | canReviewRisk |
-| PUT | /api/v1/risk-assessments/:code/approve | Bearer | canApproveRisk |
-
-### POST /api/v1/risk-assessments
-**Request**
-```json
-{ "vendor_code": "string", "assessment_date": "YYYY-MM-DD", "overall_risk_score": 0-100, "risk_level": "Low|Medium|High|Critical", "security_risk_score": 0-100, "financial_risk_score": 0-100, "operational_risk_score": 0-100, "legal_risk_score": 0-100, "status": "Draft|Reviewed|Approved", "notes": "string?" }
-```
-**Response 201** — RiskAssessment object
-
-### GET /api/v1/risk-assessments
-**Query params:** `vendor_code?`, `risk_level?`, `status?`, `limit?`, `offset?`  
-**Response 200**
-```json
-{ "data": [RiskAssessment], "total": 42 }
+**Create User**
+```graphql
+mutation CreateUser($input: CreateUserInput!) {
+  createUser(input: $input) {
+    id
+    code
+    email
+    fullName
+    role
+    isActive
+  }
+}
 ```
 
-### GET /api/v1/risk-assessments/:code
-**Response 200** — RiskAssessment
-
-### PUT /api/v1/risk-assessments/:code
-**Request** — same as Create  
-**Response 200** — RiskAssessment
-
-### DELETE /api/v1/risk-assessments/:code
-**Response 204**
-
-### PUT /api/v1/risk-assessments/:code/approve
-**Response 204**
-
----
-
-## Compliance Records
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/compliance | Bearer | canReviewCompliance |
-| GET | /api/v1/compliance | Bearer | canReviewCompliance |
-| GET | /api/v1/compliance/:code | Bearer | canReviewCompliance |
-| PUT | /api/v1/compliance/:code | Bearer | canReviewCompliance |
-| DELETE | /api/v1/compliance/:code | Bearer | canReviewCompliance |
-| GET | /api/v1/compliance/expiring | Bearer | — |
-
-### POST /api/v1/compliance
-**Request**
-```json
-{ "vendor_code": "string", "certification_type": "string", "valid_from": "YYYY-MM-DD", "valid_until": "YYYY-MM-DD", "issued_by": "string", "evidence_url": "string" }
-```
-**Response 201** — ComplianceRecord object
-
-### GET /api/v1/compliance
-**Query param:** `vendor_code` (required)  
-**Response 200** — ComplianceRecord[]
-
-### GET /api/v1/compliance/:code
-**Response 200** — ComplianceRecord
-
-### PUT /api/v1/compliance/:code
-**Request**
-```json
-{ "certification_type": "string", "status": "string", "valid_from": "YYYY-MM-DD", "valid_until": "YYYY-MM-DD", "issued_by": "string", "evidence_url": "string" }
-```
-**Response 200** — ComplianceRecord
-
-### DELETE /api/v1/compliance/:code
-**Response 204**
-
-### GET /api/v1/compliance/expiring
-**Query param:** `days?` (default 30)  
-**Response 200** — ComplianceRecord[]
-
----
-
-## Contracts
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/contracts | Bearer | canEditVendor |
-| GET | /api/v1/contracts | Bearer | canEditVendor |
-| GET | /api/v1/contracts/:code | Bearer | canEditVendor |
-| PUT | /api/v1/contracts/:code | Bearer | canEditVendor |
-| DELETE | /api/v1/contracts/:code | Bearer | canEditVendor |
-| GET | /api/v1/contracts/expiring | Bearer | — |
-
-### POST /api/v1/contracts
-**Request**
-```json
-{ "vendor_code": "string", "contract_number": "string", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "contract_value": 1000.00?, "renewal_status": "string" }
-```
-**Response 201** — Contract object
-
-### GET /api/v1/contracts
-**Query param:** `vendor_code`  
-**Response 200** — Contract[]
-
-### GET /api/v1/contracts/:code
-**Response 200** — Contract
-
-### PUT /api/v1/contracts/:code
-**Request** — same as Create  
-**Response 200** — Contract
-
-### DELETE /api/v1/contracts/:code
-**Response 204**
-
-### GET /api/v1/contracts/expiring
-**Query param:** `days?` (default 30)  
-**Response 200** — Contract[]
-
----
-
-## Audit
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| GET | /api/v1/audit | Bearer | canViewAuditHistory |
-
-### GET /api/v1/audit
-**Response 200** — AuditEntry[]
-
----
-
-## Reports
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| GET | /api/v1/reports/summary | Bearer | canAccessAllReports |
-| GET | /api/v1/reports/monthly-onboarding | Bearer | canAccessAllReports |
-| GET | /api/v1/reports/summary-2 | Bearer | canViewAssignedVendors |
-| GET | /api/v1/reports/monthly-onboarding-2 | Bearer | canViewAssignedVendors |
-
-### GET /api/v1/reports/summary
-**Response 200**
-```json
-{ "total_vendors": 120, "active_vendors": 85, "pending_approvals": 12, "high_risk_count": 15, "expiring_contracts_30d": 8, "expiring_compliance_30d": 5 }
+**Update User Role**
+```graphql
+mutation UpdateUserRole($id: ID!, $input: UpdateRoleInput!) {
+  updateUserRole(id: $id, input: $input)
+}
 ```
 
-### GET /api/v1/reports/monthly-onboarding
-**Response 200**
-```json
-{ "months": ["2026-01", ...], "onboarded": [5, ...], "approved": [4, ...] }
+**Deactivate User**
+```graphql
+mutation DeactivateUser($id: ID!) {
+  deactivateUser(id: $id)
+}
 ```
 
-### GET /api/v1/reports/summary-2
-Same as summary, scoped to assigned vendors.
-
-### GET /api/v1/reports/monthly-onboarding-2
-Same as monthly-onboarding, scoped to assigned vendors.
-
----
-
-## Categories
-
-| Method | Path | Auth | Permission |
-|--------|------|------|------------|
-| POST | /api/v1/categories | Bearer | canManageCategories |
-| GET | /api/v1/categories | Bearer | canViewCategories |
-| GET | /api/v1/categories/:code | Bearer | canViewCategories |
-| PUT | /api/v1/categories/:code | Bearer | canManageCategories |
-| DELETE | /api/v1/categories/:code | Bearer | canManageCategories |
-
-### POST /api/v1/categories
-**Request**
-```json
-{ "name": "string", "display_name": "string", "description": "string", "status": "Active|Inactive" }
-```
-**Response 201** — Category object
-
-### GET /api/v1/categories
-**Query params:** `search?`, `status?`  
-**Response 200**
-```json
-{ "data": [Category], "total": 25 }
+**Activate User**
+```graphql
+mutation ActivateUser($id: ID!) {
+  activateUser(id: $id)
+}
 ```
 
-### GET /api/v1/categories/:code
-**Response 200** — Category
-
-### PUT /api/v1/categories/:code
-**Request**
-```json
-{ "display_name": "string", "description": "string", "status": "string" }
+**Login**
+```graphql
+mutation Login($email: String!, $password: String!) {
+  login(email: $email, password: $password) {
+    token
+    expiresIn
+    user {
+      id
+      code
+      email
+      fullName
+      role
+    }
+  }
+}
 ```
-**Response 200** — Category
 
-### DELETE /api/v1/categories/:code
-**Response 204**
+**Extend Session**
+```graphql
+mutation ExtendSession {
+  extendSession {
+    token
+    expiresIn
+  }
+}
+```
+
+**Create Vendor**
+```graphql
+mutation CreateVendor($input: CreateVendorInput!) {
+  createVendor(input: $input) {
+    id
+    code
+    name
+    status
+    riskLevel
+  }
+}
+```
+
+**Update Vendor**
+```graphql
+mutation UpdateVendor($code: String!, $input: UpdateVendorInput!) {
+  updateVendor(code: $code, input: $input) {
+    id
+    code
+    name
+    status
+  }
+}
+```
+
+**Delete Vendor**
+```graphql
+mutation DeleteVendor($code: String!) {
+  deleteVendor(code: $code)
+}
+```
+
+**Submit Vendor**
+```graphql
+mutation SubmitVendor($code: String!) {
+  submitVendor(code: $code)
+}
+```
+
+**Review Risk Vendor**
+```graphql
+mutation ReviewRiskVendor($code: String!) {
+  reviewRiskVendor(code: $code)
+}
+```
+
+**Review Compliance Vendor**
+```graphql
+mutation ReviewComplianceVendor($code: String!) {
+  reviewComplianceVendor(code: $code)
+}
+```
+
+**Approve Vendor**
+```graphql
+mutation ApproveVendor($code: String!) {
+  approveVendor(code: $code)
+}
+```
+
+**Reject Vendor**
+```graphql
+mutation RejectVendor($code: String!) {
+  rejectVendor(code: $code)
+}
+```
+
+**Create Contract**
+```graphql
+mutation CreateContract($input: CreateContractInput!) {
+  createContract(input: $input) {
+    id
+    code
+    vendorCode
+    contractNumber
+    startDate
+    endDate
+    contractValue
+    renewalStatus
+  }
+}
+```
+
+**Create Compliance Record**
+```graphql
+mutation CreateComplianceRecord($vendorCode: String!, $input: CreateComplianceInput!) {
+  createComplianceRecord(vendorCode: $vendorCode, input: $input) {
+    id
+    code
+    vendorCode
+    certificationType
+    validFrom
+    validUntil
+  }
+}
+```
+
+**Create Risk Assessment**
+```graphql
+mutation CreateRiskAssessment($input: CreateRiskAssessmentInput!) {
+  createRiskAssessment(input: $input) {
+    id
+    code
+    vendorCode
+    assessmentDate
+    overallRiskScore
+    riskLevel
+    status
+  }
+}
+```
+
+**Reject Risk Assessment**
+```graphql
+mutation RejectRiskAssessment($code: String!) {
+  rejectRiskAssessment(code: $code)
+}
+```
+
+**Create Contact**
+```graphql
+mutation CreateContact($vendorCode: String!, $input: CreateContactInput!) {
+  createContact(vendorCode: $vendorCode, input: $input) {
+    id
+    code
+    vendorId
+    name
+    email
+    phone
+    position
+  }
+}
+```
+
+**Update Contact**
+```graphql
+mutation UpdateContact($id: ID!, $input: UpdateContactInput!) {
+  updateContact(id: $id, input: $input) {
+    id
+    code
+    vendorId
+    name
+    email
+    phone
+    position
+  }
+}
+```
 
 ---
 
@@ -360,7 +453,8 @@ Same as monthly-onboarding, scoped to assigned vendors.
 ```json
 { "data": [...], "total": 42 }
 ```
-Used by: categories, risk-assessments. All other list endpoints return raw arrays.
+
+Used by: categories, risk-assessments, vendors. All other list endpoints return raw arrays.
 
 ## Auth Header
 `Authorization: Bearer <token>`  
