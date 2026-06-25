@@ -6,6 +6,7 @@ replace github.com/uswuth/vytora-backend => ./
 
 require (
 	github.com/99designs/gqlgen v0.17.92
+	github.com/fatih/color v1.19.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-playground/validator/v10 v10.30.3
